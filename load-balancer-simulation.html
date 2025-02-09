@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Load Balancer Simulation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: linear-gradient(135deg, #222, #111); font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="controls" class="fixed top-4 left-4 z-10 bg-gray-800/80 p-4 rounded-lg shadow-lg backdrop-blur-sm">
+    <div class="grid grid-cols-2 gap-4 items-start">
+      <div class="space-y-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-white text-sm">Clients:</label>
+          <input type="range" id="clientCount" min="1" max="100" value="1" class="w-28 accent-blue-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-white text-sm">Speed (ms):</label>
+          <input type="range" id="clientSpeed" min="100" max="10000" value="3000" class="w-28 accent-blue-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-white text-sm">APIs:</label>
+          <input type="range" id="apiCount" min="2" max="6" value="3" class="w-28 accent-blue-500">
+        </div>
+      </div>
+      <div class="space-y-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-white text-sm">Global Speed:</label>
+          <input type="range" id="globalSpeed" min="0.1" max="3" step="0.1" value="1" class="w-28 accent-blue-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-white text-sm">Load Balancing:</label>
+          <select id="lbStrategy" class="bg-gray-700 text-white text-sm rounded px-2 py-1">
+            <option value="round-robin">Round Robin</option>
+            <option value="random">Random</option>
+            <option value="least-connections">Least Connections</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="stats" class="fixed top-4 right-4 z-10 bg-gray-800/80 p-6 rounded-lg shadow-lg backdrop-blur-sm">
+    <div class="space-y-2 text-white">
+      <div class="flex items-center justify-between gap-4">
+        <span>Total Requests:</span>
+        <span id="totalReq" class="font-mono">0</span>
+      </div>
+      <div class="flex items-center justify-between gap-4">
+        <span>Active Connections:</span>
+        <span id="activeConn" class="font-mono">0</span>
+      </div>
+      <div class="flex items-center justify-between gap-4">
+        <span>Avg. Response Time:</span>
+        <span id="avgResponse" class="font-mono">0ms</span>
+      </div>
+      <div id="apiStats" class="mt-4 space-y-2">
+        <h3 class="text-sm font-semibold">API Load Distribution</h3>
+        <!-- API stats will be dynamically inserted here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 25, 70);
+    camera.lookAt(0, 0, 0);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Load Balancer State
+    const state = {
+      clients: [],
+      apis: [],
+      totalRequests: 0,
+      activeConnections: 0,
+      totalResponseTime: 0,
+      roundRobinIndex: 0,
+      lines: []
+    };
+
+    // Stats Elements
+    const statsEl = {
+      total: document.getElementById('totalReq'),
+      active: document.getElementById('activeConn'),
+      avgResponse: document.getElementById('avgResponse'),
+      apiStats: document.getElementById('apiStats')
+    };
+
+    // Update Statistics
+    function updateStats(responseTime) {
+      state.totalRequests++;
+      state.totalResponseTime += responseTime;
+      
+      statsEl.total.textContent = state.totalRequests;
+      statsEl.active.textContent = state.activeConnections;
+      statsEl.avgResponse.textContent = 
+        Math.round(state.totalResponseTime / state.totalRequests) + 'ms';
+      
+      // Update API load distribution
+      statsEl.apiStats.innerHTML = '<h3 class="text-sm font-semibold">API Load Distribution</h3>';
+      state.apis.forEach((api, index) => {
+        const percent = Math.round((api.requests / Math.max(1, state.totalRequests)) * 100);
+        statsEl.apiStats.innerHTML += `
+          <div class="text-sm">
+            <div class="flex justify-between">
+              <span>API ${index + 1}:</span>
+              <span>${api.requests} (${percent}%)</span>
+            </div>
+            <div class="w-full bg-gray-700 h-1 rounded-full overflow-hidden">
+              <div class="bg-blue-500 h-full" style="width: ${percent}%"></div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(50, 50, 50);
+    scene.add(pointLight);
+
+    // Create text labels
+    function createLabel(text) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const dpi = window.devicePixelRatio || 1;
+      ctx.font = '20px Arial';
+      const textWidth = ctx.measureText(text).width;
+      
+      canvas.width = textWidth * dpi;
+      canvas.height = 24 * dpi;
+      ctx.scale(dpi, dpi);
+      ctx.font = '20px Arial';
+      ctx.fillStyle = '#eee';
+      ctx.fillText(text, 0, 18);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: texture, transparent: true })
+      );
+      sprite.scale.set(textWidth/20, 24/20, 1);
+      return sprite;
+    }
+
+    // Enhanced Materials with environment mapping
+    const envMap = new THREE.CubeTextureLoader()
+      .setPath('https://threejs.org/examples/textures/cube/Bridge2/')
+      .load(['posx.jpg', 'negx.jpg', 'posy.jpg', 'negy.jpg', 'posz.jpg', 'negz.jpg']);
+    
+    const createMetalMaterial = (color, roughness = 0.2) => {
+      return new THREE.MeshStandardMaterial({
+        color: color,
+        metalness: 0.9,
+        roughness: roughness,
+        envMap: envMap,
+        envMapIntensity: 1
+      });
+    };
+
+    const clientMat = createMetalMaterial(0x00ff00);
+    const loadBalancerMat = createMetalMaterial(0xff9234);
+    const apiMat = createMetalMaterial(0x44bd32);
+    // Load Balancer Logic
+    function selectAPI() {
+      const strategy = document.getElementById('lbStrategy').value;
+      switch (strategy) {
+        case 'round-robin':
+          state.roundRobinIndex = (state.roundRobinIndex + 1) % state.apis.length;
+          return state.apis[state.roundRobinIndex];
+        case 'random':
+          return state.apis[Math.floor(Math.random() * state.apis.length)];
+        case 'least-connections':
+          return state.apis.reduce((min, api) => 
+            api.activeConnections < min.activeConnections ? api : min
+          );
+      }
+    }
+
+    // Create line for request visualization
+    function createLine(start, end, color = 0x00ff00) {
+      const points = [];
+      points.push(new THREE.Vector3(start.x, start.y, start.z));
+      points.push(new THREE.Vector3(end.x, end.y, end.z));
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color });
+      return new THREE.Line(geometry, material);
+    }
+
+    // Create client mesh with original style
+    function createClientMesh() {
+      const geometry = new THREE.BoxGeometry(3, 3, 3);
+      const mesh = new THREE.Mesh(geometry, clientMat);
+      const label = createLabel('Client');
+      label.position.y = 4;
+      mesh.add(label);
+      return mesh;
+    }
+
+    // Create load balancer mesh
+    function createLoadBalancerMesh() {
+      const geometry = new THREE.BoxGeometry(4, 8, 4);
+      const mesh = new THREE.Mesh(geometry, loadBalancerMat);
+      const label = createLabel('Load Balancer');
+      label.position.y = 6;
+      mesh.add(label);
+      return mesh;
+    }
+
+    // Create API mesh
+    function createAPIMesh() {
+      const geometry = new THREE.BoxGeometry(4, 8, 4);
+      const mesh = new THREE.Mesh(geometry, apiMat);
+      const label = createLabel('API');
+      label.position.y = 6;
+      mesh.add(label);
+      return mesh;
+    }
+
+    // Setup Scene
+    function setupScene() {
+      // Clear existing objects
+      while(scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+      }
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      scene.add(pointLight);
+
+      // Create clients in a row above
+      const clientCount = parseInt(document.getElementById('clientCount').value);
+      const spacing = 8;
+      state.clients = [];
+      
+      for(let i = 0; i < clientCount; i++) {
+        const client = createClientMesh();
+        const x = (i - (clientCount-1)/2) * spacing;
+        client.position.set(x, 15, -15);
+        scene.add(client);
+        state.clients.push({
+          mesh: client,
+          lastRequest: 0
+        });
+      }
+
+      // Create load balancer in the middle
+      const loadBalancer = createLoadBalancerMesh();
+      loadBalancer.position.set(0, 0, 0);
+      scene.add(loadBalancer);
+
+      // Create APIs where database was
+      const apiCount = parseInt(document.getElementById('apiCount').value);
+      const apiSpacing = 10;
+      state.apis = [];
+
+      for(let i = 0; i < apiCount; i++) {
+        const api = createAPIMesh();
+        const x = (i - (apiCount-1)/2) * apiSpacing;
+        api.position.set(x, -15, 15);
+        scene.add(api);
+        state.apis.push({
+          mesh: api,
+          requests: 0,
+          activeConnections: 0
+        });
+      }
+    }
+
+    // Animate line for request visualization
+    function animateLine(start, end, duration, color = 0x00ff00, label = '') {
+      const line = createLine(start, end, color);
+      scene.add(line);
+      state.lines.push(line);
+
+      if (state.lines.length > 50) {
+        const oldLine = state.lines.shift();
+        scene.remove(oldLine);
+      }
+
+      // Add label if provided
+      let textSprite = null;
+      if (label) {
+        textSprite = createLabel(label);
+        const mid = new THREE.Vector3().lerpVectors(start, end, 0.5);
+        textSprite.position.copy(mid);
+        scene.add(textSprite);
+      }
+
+      setTimeout(() => {
+        scene.remove(line);
+        if (textSprite) scene.remove(textSprite);
+        const index = state.lines.indexOf(line);
+        if (index > -1) state.lines.splice(index, 1);
+      }, duration);
+    }
+
+    // Process Requests
+    function processRequests() {
+      const now = Date.now();
+      const requestSpeed = parseInt(document.getElementById('clientSpeed').value);
+      const globalSpeed = parseFloat(document.getElementById('globalSpeed').value);
+
+      state.clients.forEach(client => {
+        if (now - client.lastRequest > requestSpeed / globalSpeed) {
+          client.lastRequest = now;
+          const api = selectAPI();
+          
+          // Animate request to load balancer
+          animateLine(
+            client.mesh.position,
+            new THREE.Vector3(0, 0, 0),
+            500,
+            0x00ff00,
+            'request'
+          );
+
+          // After delay, animate to selected API
+          setTimeout(() => {
+            animateLine(
+              new THREE.Vector3(0, 0, 0),
+              api.mesh.position,
+              500,
+              0x00ff00,
+              'forward'
+            );
+            
+            api.requests++;
+            api.activeConnections++;
+            state.activeConnections++;
+            
+            // Simulate API processing
+            setTimeout(() => {
+              api.activeConnections--;
+              state.activeConnections--;
+              
+              // Animate response back through load balancer
+              animateLine(
+                api.mesh.position,
+                new THREE.Vector3(0, 0, 0),
+                500,
+                0x0000ff,
+                'response'
+              );
+              
+              setTimeout(() => {
+                animateLine(
+                  new THREE.Vector3(0, 0, 0),
+                  client.mesh.position,
+                  500,
+                  0x0000ff
+                );
+                updateStats(2000);
+              }, 500);
+            }, 1000);
+          }, 500);
+        }
+      });
+    }
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      processRequests();
+      renderer.render(scene, camera);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Setup initial scene and start animation
+    setupScene();
+    animate();
+
+    // Handle control changes
+    document.getElementById('clientCount').addEventListener('input', setupScene);
+    document.getElementById('apiCount').addEventListener('input', setupScene);
+  </script>
+</body>
+</html>
+  </script>
+</body>
+</html>
+      
+      // Hexagonal core with glowing veins
+      const coreGeometry = new THREE.CylinderGeometry(3, 3, 4, 6);
+      const coreMat = new THREE.MeshPhongMaterial({
+        color: 0x2200aa,
+        emissive: 0x4400ff,
+        emissiveIntensity: 0.5,
+        wireframe: false
+      });
+      const core = new THREE.Mesh(coreGeometry, coreMat);
+      apiGroup.add(core);
+      
+      // Rotating shield segments
+      const shieldGeometry = new THREE.TorusGeometry(5, 0.3, 16, 32);
+      const shieldMat = new THREE.MeshStandardMaterial({
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        metalness: 0.8,
+        transparent: true,
+        opacity: 0.4
+      });
+      
+      for(let i = 0; i < 3; i++) {
+        const shield = new THREE.Mesh(shieldGeometry, shieldMat);
+        shield.rotation.x = Math.PI/2;
+        shield.rotation.y = (i/3) * Math.PI*2;
+        shield.position.y = 2;
+        shield.scale.set(0.8, 0.8, 0.8);
+        apiGroup.add(shield);
+        apiGroup.userData.shields = apiGroup.userData.shields || [];
+        apiGroup.userData.shields.push(shield);
+      }
+      
+      // Holographic displays
+      const hologramMat = new THREE.MeshPhongMaterial({
+        color: 0x00ff00,
+        emissive: 0x00ff00,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+      });
+      
+      const holograms = new THREE.Group();
+      for(let i = 0; i < 4; i++) {
+        const hologram = new THREE.Mesh(
+          new THREE.PlaneGeometry(3, 2),
+          hologramMat
+        );
+        hologram.position.set(
+          Math.cos(i*Math.PI/2)*4,
+          3,
+          Math.sin(i*Math.PI/2)*4
+        );
+        hologram.lookAt(0,3,0);
+        holograms.add(hologram);
+      }
+      apiGroup.add(holograms);
+      
+      // Energy conduits
+      const conduitMat = new THREE.LineBasicMaterial({ 
+        color: 0xff00ff,
+        linewidth: 2 
+      });
+      
+      for(let i = 0; i < 6; i++) {
+        const points = [];
+        points.push(new THREE.Vector3(0, -2, 0));
+        points.push(new THREE.Vector3(
+          Math.cos(i*Math.PI/3)*5,
+          4,
+          Math.sin(i*Math.PI/3)*5
+        ));
+        
+        const conduit = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(points),
+          conduitMat
+        );
+        apiGroup.add(conduit);
+      }
+      
+      return apiGroup;
+    };
+    
+    const apiGeometry = createWebApi();
+    apiGeometry.position.set(0, 0, 0); // Centered below client
+    scene.add(apiGeometry);
+    const webApi = apiGeometry; // Reference for animations
+    
+    const apiLabel = createLabel("Web-API");
+    apiLabel.position.set(0, 6, 0); // Position label above web-api
+    scene.add(apiLabel);
+
+    // Redis Cache - Crystal-like structure
+    const cacheGeometry = new THREE.Group();
+    const mainCube = new THREE.Mesh(
+      new THREE.BoxGeometry(4, 4, 4),
+      redisMat
+    );
+    cacheGeometry.add(mainCube);
+    
+    // Add crystalline details
+    const pyramid = new THREE.ConeGeometry(1, 2, 4);
+    const positions = [
+      [2, 2, 2], [2, 2, -2], [-2, 2, 2], [-2, 2, -2],
+      [2, -2, 2], [2, -2, -2], [-2, -2, 2], [-2, -2, -2]
+    ];
+    
+    positions.forEach(([x, y, z]) => {
+      const point = new THREE.Mesh(pyramid, redisMat);
+      point.position.set(x, y, z);
+      point.lookAt(0, 0, 0);
+      cacheGeometry.add(point);
+    });
+    
+    cacheGeometry.position.set(30, 0, 0);
+    scene.add(cacheGeometry);
+    const redisCache = cacheGeometry; // Reference for animations
+    
+    const redisLabel = createLabel("Redis Cache");
+    redisLabel.position.set(30, 6, 0);
+    scene.add(redisLabel);
+
+    // Postgres Database - Layered cylinder with details
+    const dbGeometry = new THREE.Group();
+    
+    // Main cylinder body
+    const mainBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.5, 3, 6, 32),
+      pgMat
+    );
+    dbGeometry.add(mainBody);
+    
+    // Add disk platters
+    const platterGeometry = new THREE.CylinderGeometry(3.5, 3.5, 0.2, 32);
+    const platterPositions = [-2, -1, 0, 1, 2];
+    
+    platterPositions.forEach(y => {
+      const platter = new THREE.Mesh(platterGeometry, pgMat);
+      platter.position.y = y;
+      dbGeometry.add(platter);
+    });
+    
+    // Add a spinning top indicator
+    const indicator = new THREE.Mesh(
+      new THREE.ConeGeometry(1, 2, 32),
+      pgMat
+    );
+    indicator.position.y = 4;
+    dbGeometry.add(indicator);
+    
+    dbGeometry.position.set(0, -30, 0);
+    scene.add(dbGeometry);
+    const pgDatabase = dbGeometry; // Reference for animations
+    
+    const pgLabel = createLabel("Postgres Database");
+    pgLabel.position.set(0, -24, 0);
+    scene.add(pgLabel);
+    
+    // Create a fancy client mesh
+    const createClientMesh = () => {
+      const group = new THREE.Group();
+      
+      // Main body - octahedron
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(1.5),
+        clientMat
+      );
+      group.add(core);
+      
+      // Orbiting rings
+      const ring1 = new THREE.Mesh(
+        new THREE.TorusGeometry(2, 0.1, 16, 32),
+        clientMat
+      );
+      const ring2 = new THREE.Mesh(
+        new THREE.TorusGeometry(2, 0.1, 16, 32),
+        clientMat
+      );
+      
+      ring1.rotation.x = Math.PI / 2;
+      ring2.rotation.y = Math.PI / 2;
+      
+      group.add(ring1);
+      group.add(ring2);
+      
+      // Small satellites
+      const satellite = new THREE.Mesh(
+        new THREE.TetrahedronGeometry(0.3),
+        clientMat
+      );
+      
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const clone = satellite.clone();
+        clone.position.set(
+          Math.cos(angle) * 2.5,
+          Math.sin(angle) * 2.5,
+          0
+        );
+        group.userData.satellites = group.userData.satellites || [];
+        group.userData.satellites.push(clone);
+        group.add(clone);
+      }
+      
+      // Store references for animation
+      group.userData.rings = [ring1, ring2];
+      return group;
+    };
+
+    // Animation loop for rotations and rendering
+    const clock = new THREE.Clock();
+    const animate = () => {
+      const delta = clock.getDelta();
+      requestAnimationFrame(animate);
+      const time = Date.now() * 0.001; // Current time for animations
+      
+      // Handle Web-API animations
+      if (apiGeometry) {
+        const time = Date.now() * 0.001;
+        
+        // Rotate shields
+        apiGeometry.userData.shields?.forEach((shield, i) => {
+          shield.rotation.z += 0.02;
+          shield.scale.x = 1 + Math.sin(time + i) * 0.1;
+        });
+        
+        // Animate holograms
+        apiGeometry.children[1].children.forEach((hologram, i) => {
+          hologram.material.opacity = 0.2 + Math.sin(time * 2 + i) * 0.1;
+          hologram.rotation.y += 0.01;
+          // Make holograms float
+          hologram.position.y = 3 + Math.sin(time * 1.5 + i * Math.PI/2) * 0.5;
+        });
+        
+        // Pulse core
+        const core = apiGeometry.children[0];
+        core.material.emissiveIntensity = 0.5 + Math.sin(time * 2) * 0.2;
+        
+        // Animate energy conduits
+        apiGeometry.children.forEach((child, i) => {
+          if (child instanceof THREE.Line) {
+            child.material.opacity = 0.6 + Math.sin(time * 3 + i) * 0.4;
+          }
+        });
+        
+        // Overall gentle rotation
+        apiGeometry.rotation.y += 0.005;
+      }
+      
+      // Handle Redis Cache animations
+      if (cacheGeometry) {
+        cacheGeometry.rotation.y += 0.003;
+        
+        if (cacheValid) {
+          // Animate cache particles in orbit
+          cacheParticles.forEach(particle => {
+            const time = Date.now() * 0.001 * particle.userData.speed;
+            particle.position.x = Math.cos(time + particle.userData.offset) * particle.userData.radius;
+            particle.position.z = Math.sin(time + particle.userData.offset) * particle.userData.radius;
+            particle.position.y = Math.sin(time * 2) * 0.5;
+            particle.material.opacity = 0.6 + Math.sin(time * 3) * 0.2;
+            particle.rotation.y += 0.05;
+          });
+          // Update cache colors - main cube is first child
+          if (cacheGeometry.children[0]) {
+            const activeColor = 0x00ffff; // Bright cyan color
+            cacheGeometry.children[0].material.color.setHex(activeColor);
+            cacheGeometry.children[0].material.emissive.setHex(activeColor);
+            cacheGeometry.children[0].material.emissiveIntensity = 0.7;
+            
+            // Animate energy field
+            if (energyField) {
+              const time = Date.now() * 0.001;
+              energyField.rotation.x = Math.sin(time * 0.5) * 0.3;
+              energyField.rotation.y += 0.01;
+              energyField.rotation.z = Math.cos(time * 0.3) * 0.2;
+              energyField.scale.setScalar(1 + Math.sin(time * 2) * 0.1);
+              energyField.material.opacity = 0.2 + Math.sin(time * 3) * 0.1;
+            }
+          }
+        } else {
+          // Hide particles when cache invalid
+          cacheParticles.forEach(particle => {
+            particle.material.opacity = 0;
+          });
+          // Update cache colors - main cube is first child
+          if (cacheGeometry.children[0]) {
+            cacheGeometry.children[0].material.color.setHex(0x555555);
+            cacheGeometry.children[0].material.emissive.setHex(0x555555);
+          }
+        }
+        
+        // Rotate crystal points
+        cacheGeometry.children.forEach((child, i) => {
+          if (i > 0) { // Skip main cube
+            child.rotation.z = time * 0.5;
+          }
+        });
+      }
+      
+      // Handle Database animations
+      if (pgDatabase) {
+        // Keep database at normal size
+        pgDatabase.scale.set(1, 1, 1);
+        
+        // Update load rings and data cubes
+        if (loadRing && loadRing.userData.rings) {
+          const loadPercent = dbLoadLevel / MAX_LOAD;
+          const time = Date.now() * 0.001;
+          
+          // Animate data cubes
+          dataCubes.forEach(cube => {
+            // Update position
+            cube.userData.angle += cube.userData.speed * (1 + loadPercent) * 0.02;
+            cube.position.x = Math.cos(cube.userData.angle) * cube.userData.radius;
+            cube.position.z = Math.sin(cube.userData.angle) * cube.userData.radius;
+            cube.position.y = cube.userData.baseY + Math.sin(time * 2 + cube.userData.angle) * 2;
+            
+            // Update rotation
+            cube.rotation.x += cube.userData.rotationSpeed.x;
+            cube.rotation.y += cube.userData.rotationSpeed.y;
+            cube.rotation.z += cube.userData.rotationSpeed.z;
+            
+            // Update color and opacity based on load
+            const hue = 0.1 - (loadPercent * 0.1); // Shift from orange to red
+            cube.material.color.setHSL(hue, 1, 0.5);
+            cube.material.emissive.setHSL(hue, 1, 0.5);
+            cube.material.opacity = 0.5 + (loadPercent * 0.3);
+          });
+          
+          // Update both rings with different animations
+          loadRing.userData.rings.forEach((ring, index) => {
+            // Color transition from green to red based on load
+            ring.material.color.setHSL(0.3 * (1 - loadPercent), 1, 0.5);
+            ring.material.emissive.setHSL(0.3 * (1 - loadPercent), 1, 0.5);
+            
+            // Rotate rings in opposite directions
+            ring.rotation.y += (0.02 * (1 + loadPercent)) * (index ? 1 : -1);
+            
+            // Pulsing effect with offset between rings
+            const pulseOffset = index * Math.PI;
+            ring.scale.setScalar(1 + 0.2 * Math.sin(time * 2 + pulseOffset));
+            
+            // Opacity based on load
+            ring.material.opacity = 0.4 + (loadPercent * 0.4) + Math.sin(time * 3) * 0.2;
+          });
+        }
+        
+        // Fire effect when under high load
+        if (dbLoadLevel > 3) {
+          const frontPosition = new THREE.Vector3()
+            .copy(pgDatabase.position)
+            .add(new THREE.Vector3(0, 3, 5));
+          
+          if (Math.random() < 0.15) {
+            createParticles(frontPosition, 0xff4500);
+            createParticles(frontPosition, 0xff0000);
+          }
+          
+          if (!burningLight) {
+            burningLight = new THREE.PointLight(0xff4500, 5, 20);
+            pgDatabase.add(burningLight);
+          }
+          burningLight.intensity = 0.5 + Math.random() * 1.5;
+          burningLight.position.y = 3 + Math.sin(Date.now() * 0.01) * 2;
+        }
+      }
+      
+      // Handle Client animations
+      clientGroup.children.forEach(client => {
+        // Rotate core
+        client.rotation.y += 0.01;
+        
+        // Rotate rings in different directions
+        const rings = client.userData.rings;
+        if (rings) {
+          rings[0].rotation.y = time * 0.5;
+          rings[1].rotation.x = time * 0.7;
+        }
+        
+        // Orbit satellites
+        const satellites = client.userData.satellites;
+        if (satellites) {
+          satellites.forEach((sat, i) => {
+            const angle = time * (1 + i * 0.2);
+            sat.position.x = Math.cos(angle) * 2.5;
+            sat.position.y = Math.sin(angle) * 2.5;
+            sat.rotation.z = angle;
+          });
+        }
+      });
+      
+      // Render the scene
+      renderer.render(scene, camera);
+      
+      // Burning effect under high load
+      if (dbLoadLevel >= 4) {
+        const frontPosition = new THREE.Vector3()
+          .copy(pgDatabase.position)
+          .add(new THREE.Vector3(0, 3, 5));
+        
+        createParticles(frontPosition, 0xff4500);
+        createParticles(frontPosition, 0xff0000);
+        
+        if (!burningLight) {
+          burningLight = new THREE.PointLight(0xff4500, 5, 20);
+          pgDatabase.add(burningLight);
+        }
+        burningLight.intensity = 0.5 + Math.random() * 1.5;
+        burningLight.position.y = 3 + Math.sin(Date.now() * 0.01) * 2;
+      }
+    };
+
+    // Global speed multiplier.
+    const getGlobalSpeed = () => parseFloat(document.getElementById('globalSpeed').value) || 1;
+
+    // Global label offset for line labels.
+    let globalLabelIndex = 0;
+    const animateLine = async (start, end, duration, color, labelText) => {
+      const adjustedDuration = duration / getGlobalSpeed();
+      
+      // Create a more interesting path with multiple control points
+      const points = [];
+      const steps = 50;
+      const radius = Math.abs(start.x - end.x) * 0.2;
+      const heightDiff = start.y - end.y;
+      
+      // Create a helix-like curve
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        // Base position
+        const x = start.x * (1 - t) + end.x * t;
+        const y = start.y * (1 - t) + end.y * t;
+        // Add wave effect
+        const wave = Math.sin(t * Math.PI * 2) * radius * (1 - t);
+        const wave2 = Math.cos(t * Math.PI * 3) * radius * 0.5 * (1 - t);
+        points.push(new THREE.Vector3(
+          x + wave,
+          y,
+          wave2 + 5 * Math.sin(t * Math.PI) // Forward curve
+        ));
+      }
+      
+      // Create the main line
+      const geometry = new THREE.BufferGeometry().setFromPoints([points[0]]);
+      const material = new THREE.LineBasicMaterial({
+        color,
+        opacity: 0.8,
+        transparent: true,
+        linewidth: 2
+      });
+      const line = new THREE.Line(geometry, material);
+      
+      // Create trailing effect line
+      const trailGeometry = new THREE.BufferGeometry().setFromPoints([points[0]]);
+      const trailMaterial = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        opacity: 0.3,
+        transparent: true
+      });
+      const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+      
+      scene.add(line);
+      scene.add(trailLine);
+      
+      // Create and position label with bobbing animation
+      const textSprite = createLabel(labelText);
+      const labelBasePos = points[Math.floor(points.length * 0.5)];
+      textSprite.position.copy(labelBasePos);
+      scene.add(textSprite);
+      
+      const t0 = performance.now();
+      await new Promise(resolve => {
+        const animate = () => {
+          const t = Math.min((performance.now()-t0)/adjustedDuration, 1);
+          const numPoints = Math.floor(t * points.length);
+          
+          // Update main line
+          geometry.setFromPoints(points.slice(0, numPoints + 1));
+          
+          // Update trail (shorter, follows behind)
+          const trailStart = Math.max(0, numPoints - 10);
+          trailGeometry.setFromPoints(points.slice(trailStart, numPoints + 1));
+          
+          // Animate label position
+          const labelBob = Math.sin(t * Math.PI * 4) * 0.5;
+          textSprite.position.copy(labelBasePos).add(new THREE.Vector3(0, labelBob, 0));
+          
+          // Fade out near the end
+          if (t > 0.8) {
+            const fade = (1 - t) * 5;
+            material.opacity = fade * 0.8;
+            trailMaterial.opacity = fade * 0.3;
+            textSprite.material.opacity = fade;
+          }
+          
+          if(t < 1) requestAnimationFrame(animate);
+          else {
+            setTimeout(() => {
+              scene.remove(line);
+              scene.remove(trailLine);
+              scene.remove(textSprite);
+              resolve();
+            }, 200);
+          }
+        };
+        animate();
+      });
+    };
+
+    // Particle effect for cache hit.
+    const createParticles = (position, color) => {
+      const geometry = new THREE.BufferGeometry();
+      const vertices = [];
+      for(let i = 0; i < 20; i++){
+        vertices.push(position.x, position.y, position.z);
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      const material = new THREE.PointsMaterial({ color, size: 0.5 });
+      const particles = new THREE.Points(geometry, material);
+      scene.add(particles);
+      setTimeout(() => scene.remove(particles), 500);
+      
+      if (color === 0xff0000) { // Fire particles
+        particles.userData.velocity = new THREE.Vector3(0, 4 + Math.random() * 3, 0);
+        particles.userData.size = 5;
+        particles.userData.opacity = 1;
+        setTimeout(() => scene.remove(particles), 1000);
+      } else {
+        particles.userData.velocity = new THREE.Vector3(0, 0.5 + Math.random(), 0);
+        particles.userData.size = 1;
+        particles.userData.opacity = 0.4;
+      }
+    };
+
+    // Database animations and effects
+    const animateDbOperation = async (isWrite = false) => {
+      // Create floating data cubes
+      const cubeCount = isWrite ? 5 : 3;
+      for(let i = 0; i < cubeCount; i++) {
+        const cube = new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 0.8, 0.8),
+          new THREE.MeshStandardMaterial({
+            color: isWrite ? 0xff4500 : 0xff8c00,
+            emissive: isWrite ? 0xff4500 : 0xff8c00,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.8
+          })
+        );
+        cube.position.copy(pgDatabase.position);
+        scene.add(cube);
+        
+        // Animate cube floating
+        const startPos = cube.position.clone();
+        const endPos = startPos.clone().add(
+          new THREE.Vector3(
+            (Math.random() - 0.5) * 5,
+            5 + Math.random() * 3,
+            (Math.random() - 0.5) * 5
+          )
+        );
+        const startTime = Date.now();
+        const duration = 1500 + Math.random() * 500;
+        
+        const animateCube = () => {
+          const elapsed = Date.now() - startTime;
+          const t = elapsed / duration;
+          
+          if (t < 1) {
+            cube.position.lerpVectors(startPos, endPos, t);
+            cube.rotation.x += 0.05;
+            cube.rotation.y += 0.05;
+            cube.material.opacity = 0.8 * (1 - t);
+            requestAnimationFrame(animateCube);
+          } else {
+            scene.remove(cube);
+          }
+        };
+        setTimeout(() => animateCube(), i * 200);
+      }
+      
+      // Create energy burst
+      createParticles(pgDatabase.position, isWrite ? 0xff4500 : 0xff8c00);
+      
+      // Update load level
+      dbLoadLevel = Math.min(dbLoadLevel + (isWrite ? 0.3 : 0.2), 1);
+    };
+    
+    // Database load tracking
+    let dbLoadLevel = 0;
+    let burningLight = null; // Fire effect light source
+    let loadRing = null; // Visual load indicator ring
+    let dataCubes = []; // Floating data cubes
+    const MAX_LOAD = 5; // Higher threshold for scaling stages
+    
+    // Create floating data cubes around database
+    const createDataCubes = () => {
+      const cubeCount = 8;
+      const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      
+      for (let i = 0; i < cubeCount; i++) {
+        const material = new THREE.MeshPhongMaterial({
+          color: 0xff4500,
+          emissive: 0xff4500,
+          emissiveIntensity: 0.3,
+          transparent: true,
+          opacity: 0.7,
+          flatShading: true
+        });
+        
+        const cube = new THREE.Mesh(geometry, material);
+        const angle = (i / cubeCount) * Math.PI * 2;
+        const radius = 6;
+        
+        cube.position.set(
+          Math.cos(angle) * radius,
+          0,
+          Math.sin(angle) * radius
+        );
+        
+        cube.userData = {
+          baseY: cube.position.y,
+          angle: angle,
+          radius: radius,
+          speed: 0.2 + Math.random() * 0.3,
+          rotationSpeed: new THREE.Vector3(
+            Math.random() * 0.02,
+            Math.random() * 0.02,
+            Math.random() * 0.02
+          )
+        };
+        
+        pgDatabase.add(cube);
+        dataCubes.push(cube);
+      }
+    };
+    createDataCubes();
+    
+    // Create load indicator ring
+    const createLoadRing = () => {
+      // Create two rings for a more dramatic effect
+      const createRing = (radius, thickness) => {
+        const geometry = new THREE.TorusGeometry(radius, thickness, 16, 50);
+        const material = new THREE.MeshPhongMaterial({
+          color: 0x00ff00,
+          emissive: 0x00ff00,
+          emissiveIntensity: 0.5,
+          transparent: true,
+          opacity: 0.6
+        });
+        return new THREE.Mesh(geometry, material);
+      };
+      
+      // Create a group to hold both rings
+      loadRing = new THREE.Group();
+      
+      // Outer ring
+      const outerRing = createRing(8, 0.3);
+      outerRing.rotation.x = Math.PI / 2;
+      loadRing.add(outerRing);
+      
+      // Inner ring
+      const innerRing = createRing(6, 0.2);
+      innerRing.rotation.x = Math.PI / 2;
+      loadRing.add(innerRing);
+      
+      // Position the ring group
+      loadRing.position.y = 0;
+      pgDatabase.add(loadRing);
+      
+      // Store references to rings for animation
+      loadRing.userData.rings = [outerRing, innerRing];
+    };
+    createLoadRing();
+    const LOAD_DECAY_INTERVAL = 150; // Faster updates
+    const LOAD_DECAY_AMOUNT = 0.15; // Slower decay
+    
+    // Start load decay loop
+    setInterval(() => {
+      if (dbLoadLevel > 0) {
+        dbLoadLevel = Math.max(0, dbLoadLevel - LOAD_DECAY_AMOUNT);
+        
+        // Extreme visual effects
+        const loadRatio = dbLoadLevel / MAX_LOAD;
+        
+        // Massive scaling effect
+        const baseScale = 1 + (loadRatio * 2.0); // Up to 3x bigger
+        const pulseAmount = Math.sin(Date.now() / 100) * loadRatio * 0.5; // Faster, bigger pulse
+        const scale = baseScale + pulseAmount;
+        pgDatabase.scale.setScalar(scale);
+        
+        // Extreme color and glow
+        const glowIntensity = loadRatio * 5.0; // Much more glow
+        const heatColor = new THREE.Color(
+          1,  // Full red
+          Math.max(0, 0.7 - loadRatio * 2),  // Less green
+          Math.max(0, 0.4 - loadRatio * 2)   // Less blue
+        );
+        pgMat.emissive.copy(heatColor).multiplyScalar(glowIntensity);
+        
+        // Wild rotation and movement
+        const now = Date.now();
+        pgDatabase.children.forEach(child => {
+          if (child.userData.baseSpeed) {
+            // Extreme wobble
+            const xWobble = Math.sin(now / 100) * loadRatio * 0.3;
+            const yWobble = Math.cos(now / 150) * loadRatio * 0.3;
+            const zWobble = Math.sin(now / 200) * loadRatio * 0.3;
+            
+            child.rotation.x = xWobble;
+            child.rotation.y += child.userData.baseSpeed * (1 + loadRatio * 8); // Much faster spin
+            child.rotation.z = zWobble;
+            
+            // Position wobble
+            child.position.x = Math.sin(now / 300) * loadRatio * 0.5;
+            child.position.y = Math.cos(now / 400) * loadRatio * 0.5;
+            child.position.z = Math.sin(now / 500) * loadRatio * 0.5;
+          }
+        });
+        
+        // More frequent particles
+        if (loadRatio > 0.3 && Math.random() < loadRatio * 0.5) {
+          const particlePos = pgDatabase.position.clone();
+          particlePos.x += (Math.random() - 0.5) * 2;
+          particlePos.y += (Math.random() - 0.5) * 2;
+          createParticles(particlePos, heatColor);
+        }
+      } else {
+        // Smooth reset
+        pgDatabase.children.forEach(child => {
+          if (child.userData.baseSpeed) {
+            child.rotation.x *= 0.9;
+            child.rotation.z *= 0.9;
+            child.position.x *= 0.9;
+            child.position.y *= 0.9;
+            child.position.z *= 0.9;
+          }
+        });
+      }
+    }, LOAD_DECAY_INTERVAL);
+    
+    // Global cache validity flag and visualization
+    let cacheValid = false;
+    let cacheParticles = [];
+    let energyField = null;
+    
+    // Create energy field effect
+    const createEnergyField = () => {
+      const geometry = new THREE.IcosahedronGeometry(5, 1);
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0.2,
+        transparent: true,
+        opacity: 0.2,
+        wireframe: true
+      });
+      
+      energyField = new THREE.Mesh(geometry, material);
+      redisCache.add(energyField);
+    };
+    createEnergyField();
+    
+    const createCacheParticleSystem = () => {
+      const particleCount = 20;
+      const geometry = new THREE.SphereGeometry(0.2, 8, 8);
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.6
+      });
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(geometry, material);
+        particle.userData.offset = Math.random() * Math.PI * 2;
+        particle.userData.speed = 0.5 + Math.random() * 0.5;
+        particle.userData.radius = 3 + Math.random() * 2;
+        redisCache.add(particle);
+        cacheParticles.push(particle);
+      }
+    };
+    createCacheParticleSystem();
+    
+    // Global cache validity flag.
+
+    // Process a request with numbered steps.
+    const processRequest = async clientPos => {
+      // Client to API request
+      await animateLine(clientPos, webApi.position, 1500, 0x00ffff, "1. Request", 1);
+      
+      // Track start time for response measurement
+      const startTime = performance.now();
+      if(document.getElementById('disableCache').checked){
+        // Cache disabled: slower DB query
+        await animateLine(webApi.position, pgDatabase.position, 3000, 0xff4500, "2. DB Query", 2);
+        dbLoadLevel = Math.min(MAX_LOAD, dbLoadLevel + 1);
+        await animateLine(pgDatabase.position, webApi.position, 3000, 0xff4500, "3. DB Response", 2);
+        await animateLine(webApi.position, clientPos, 1500, 0xff4500, "4. Response (Slow)", 1.5);
+      } else {
+        await animateLine(webApi.position, redisCache.position, 800, 0x00ffff, "2. Check Cache", 1);
+        if(cacheValid){
+          await animateLine(redisCache.position, webApi.position, 800, 0x00ffff, "3. Cache Hit", 1);
+          createParticles(redisCache.position, 0x00ffff);
+          await animateLine(webApi.position, clientPos, 1000, 0x00ffff, "4. Response (Fast)", 1);
+        } else {
+          await animateLine(redisCache.position, webApi.position, 1200, 0xff0000, "3. Cache Miss");
+          await animateLine(webApi.position, pgDatabase.position, 3000, 0xff4500, "4. DB Fetch");
+          dbLoadLevel = Math.min(MAX_LOAD, dbLoadLevel + 1);
+          await animateLine(pgDatabase.position, webApi.position, 3000, 0xff4500, "5. DB Response");
+          await animateLine(webApi.position, redisCache.position, 1200, 0x00ff00, "6. Cache Update");
+          cacheValid = true;
+          redisMat.color.setHex(0x1e90ff);
+          await animateLine(webApi.position, clientPos, 1500, 0xffffff, "7. Response");
+        }
+      }
+    };
+
+    // Cache invalidation visualization.
+    const processInvalidate = async () => {
+      if(clients.length === 0) return;
+      const clientPos = clients[0].pos;
+      
+      // 1. Client sends update request
+      await animateLine(clientPos, webApi.position, 1500, 0xff00ff, "1. Update Request");
+      
+      // 2. Store new data in database with fancy effects
+      await animateLine(webApi.position, pgDatabase.position, 2000, 0xff4500, "2. Store in DB");
+      await animateDbOperation(true); // true for write operation
+      await animateLine(pgDatabase.position, webApi.position, 1500, 0xff4500, "3. DB Stored");
+      createParticles(webApi.position, 0xff4500);
+      
+      // 3. Invalidate cache after DB update
+      await animateLine(webApi.position, redisCache.position, 1200, 0xff00ff, "4. Invalidate Cache");
+      
+      // Update cache state
+      cacheValid = false;
+      redisMat.color.setHex(0x555555);
+      
+      // 4. Confirm back to client
+      await animateLine(webApi.position, clientPos, 1000, 0xff00ff, "5. Update Complete");
+    };
+    document.getElementById('editBtn').addEventListener('click', processInvalidate);
+
+    // Clients arranged in a row above the Web-API.
+    const clientGroup = new THREE.Group();
+    scene.add(clientGroup);
+    let clients = [];
+    let currentClientVersion = 0;
+    const startClientLoop = (client, version) => {
+      // Random initial delay between 0-2 seconds
+      let initialDelay = Math.random() * 2000;
+      
+      const loop = async () => {
+        if(version !== currentClientVersion) return;
+        const speed = +document.getElementById('clientSpeed').value;
+        
+        // Add random offset to request timing
+        if (initialDelay > 0) {
+          await new Promise(resolve => setTimeout(resolve, initialDelay));
+          // Reset delay after first run
+          initialDelay = 0;
+        }
+        const baseDelay = speed + Math.random() * 3000;
+        const delay = baseDelay / getGlobalSpeed();
+        await new Promise(r => setTimeout(r, delay));
+        if(version !== currentClientVersion) return;
+        const startTime = performance.now();
+        await processRequest(client.pos);
+        const duration = performance.now() - startTime;
+        updateStats(duration);
+        loop();
+      };
+      setTimeout(loop, Math.random() * 3000 / getGlobalSpeed());
+    };
+
+    // Create clients in a circular arrangement
+    const createClients = () => {
+      clients.forEach(c => scene.remove(c.label));
+      clientGroup.clear();
+      clients = [];
+      currentClientVersion++;
+      const count = +document.getElementById('clientCount').value;
+      
+      // Calculate optimal arrangement
+      const baseRadius = 20; // Base radius for the circle
+      const maxRadius = 40; // Maximum radius
+      const minSpacing = 3; // Minimum space between clients
+      
+      // Calculate number of rings needed
+      const calculateRings = (count) => {
+        let rings = 1;
+        let totalFit = 0;
+        while (totalFit < count) {
+          const circumference = 2 * Math.PI * (baseRadius + (rings - 1) * 5);
+          const canFitInRing = Math.floor(circumference / minSpacing);
+          totalFit += canFitInRing;
+          if (totalFit >= count) break;
+          rings++;
+        }
+        return rings;
+      };
+      
+      const rings = calculateRings(count);
+      let placed = 0;
+      
+      // Scale factor based on total count but less aggressive reduction
+      const scaleFactor = Math.max(0.4, 1 - (count - 1) * 0.02);
+      
+      // Place clients ring by ring
+      for (let ring = 1; ring <= rings && placed < count; ring++) {
+        const ringRadius = baseRadius + (ring - 1) * 5;
+        const circumference = 2 * Math.PI * ringRadius;
+        const clientsInThisRing = Math.min(
+          Math.floor(circumference / minSpacing),
+          count - placed
+        );
+        
+        for (let i = 0; i < clientsInThisRing && placed < count; i++) {
+          const angle = (i / clientsInThisRing) * Math.PI * 2;
+          
+          // Calculate position with higher base height and more spacing between rings
+          const x = Math.sin(angle) * ringRadius;
+          const baseHeight = 20; // Start much higher
+          const ringSpacing = 3; // More vertical space between rings
+          const y = baseHeight + (rings - ring) * ringSpacing; // Higher rings are higher up
+          const z = Math.cos(angle) * ringRadius;
+          
+          const pos = new THREE.Vector3(x, y, z);
+          
+          // Create client mesh with ring-based rotation
+          const client = createClientMesh();
+          client.position.copy(pos);
+          client.scale.setScalar(scaleFactor * 0.7);
+          // Rotate to face center
+          client.lookAt(new THREE.Vector3(0, pos.y, 0));
+          clientGroup.add(client);
+          
+          // Add label above client
+          const label = createLabel("Client");
+          label.position.copy(pos).add(new THREE.Vector3(0, 2 * scaleFactor, 0));
+          label.scale.multiplyScalar(scaleFactor);
+          scene.add(label);
+          
+          clients.push({ pos, label });
+          placed++;
+        }
+      }
+      
+      clients.forEach(client => startClientLoop(client, currentClientVersion));
+    };
+    createClients();
+    document.getElementById('clientCount').addEventListener('input', createClients);
+
+    // Start the animation loop
+    animate();
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
