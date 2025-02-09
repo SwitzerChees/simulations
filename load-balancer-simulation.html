@@ -194,14 +194,60 @@
       return new THREE.Line(geometry, material);
     }
 
-    // Create client mesh with original style
+    // Create a fancy client mesh
     function createClientMesh() {
-      const geometry = new THREE.BoxGeometry(3, 3, 3);
-      const mesh = new THREE.Mesh(geometry, clientMat);
+      const group = new THREE.Group();
+      
+      // Main body - octahedron
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(1.5),
+        clientMat
+      );
+      group.add(core);
+      
+      // Orbiting rings
+      const ring1 = new THREE.Mesh(
+        new THREE.TorusGeometry(2, 0.1, 16, 32),
+        clientMat
+      );
+      const ring2 = new THREE.Mesh(
+        new THREE.TorusGeometry(2, 0.1, 16, 32),
+        clientMat
+      );
+      
+      ring1.rotation.x = Math.PI / 2;
+      ring2.rotation.y = Math.PI / 2;
+      
+      group.add(ring1);
+      group.add(ring2);
+      
+      // Small satellites
+      const satellite = new THREE.Mesh(
+        new THREE.TetrahedronGeometry(0.3),
+        clientMat
+      );
+      
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const clone = satellite.clone();
+        clone.position.set(
+          Math.cos(angle) * 2.5,
+          Math.sin(angle) * 2.5,
+          0
+        );
+        group.userData.satellites = group.userData.satellites || [];
+        group.userData.satellites.push(clone);
+        group.add(clone);
+      }
+      
+      // Add label
       const label = createLabel('Client');
       label.position.y = 4;
-      mesh.add(label);
-      return mesh;
+      group.add(label);
+      
+      // Store references for animation
+      group.userData.rings = [ring1, ring2];
+      return group;
     }
 
     // Create load balancer mesh
@@ -233,20 +279,66 @@
       scene.add(new THREE.AmbientLight(0xffffff, 0.5));
       scene.add(pointLight);
 
-      // Create clients in a row above
+      // Create clients in a circular arrangement
       const clientCount = parseInt(document.getElementById('clientCount').value);
-      const spacing = 8;
       state.clients = [];
       
-      for(let i = 0; i < clientCount; i++) {
-        const client = createClientMesh();
-        const x = (i - (clientCount-1)/2) * spacing;
-        client.position.set(x, 15, -15);
-        scene.add(client);
-        state.clients.push({
-          mesh: client,
-          lastRequest: 0
-        });
+      // Calculate optimal arrangement
+      const baseRadius = 20; // Base radius for the circle
+      const maxRadius = 40; // Maximum radius
+      const minSpacing = 6; // Minimum space between clients
+      
+      // Calculate number of rings needed
+      const calculateRings = (count) => {
+        let rings = 1;
+        let totalFit = 0;
+        while (totalFit < count) {
+          const circumference = 2 * Math.PI * (baseRadius + (rings - 1) * 5);
+          const canFitInRing = Math.floor(circumference / minSpacing);
+          totalFit += canFitInRing;
+          if (totalFit >= count) break;
+          rings++;
+        }
+        return rings;
+      };
+      
+      const rings = calculateRings(clientCount);
+      let placed = 0;
+      
+      // Scale factor based on total count
+      const scaleFactor = Math.max(0.4, 1 - (clientCount - 1) * 0.02);
+      
+      // Place clients ring by ring
+      for (let ring = 1; ring <= rings && placed < clientCount; ring++) {
+        const ringRadius = baseRadius + (ring - 1) * 5;
+        const circumference = 2 * Math.PI * ringRadius;
+        const clientsInRing = Math.min(
+          Math.floor(circumference / minSpacing),
+          clientCount - placed
+        );
+        
+        for (let i = 0; i < clientsInRing; i++) {
+          const angle = (i / clientsInRing) * Math.PI * 2;
+          const client = createClientMesh();
+          
+          // Position in circle
+          client.position.set(
+            Math.cos(angle) * ringRadius,
+            15, // Height above load balancer
+            Math.sin(angle) * ringRadius - 15 // Offset back
+          );
+          
+          // Scale based on ring
+          const ringScale = scaleFactor * (1 - (ring - 1) * 0.15);
+          client.scale.set(ringScale, ringScale, ringScale);
+          
+          scene.add(client);
+          state.clients.push({
+            mesh: client,
+            lastRequest: 0
+          });
+          placed++;
+        }
       }
 
       // Create load balancer in the middle
@@ -441,6 +533,29 @@
     // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
+      
+      // Animate client meshes
+      state.clients.forEach(client => {
+        const time = Date.now() * 0.001;
+        
+        // Rotate rings
+        if (client.mesh.userData.rings) {
+          client.mesh.userData.rings[0].rotation.x = time * 0.5;
+          client.mesh.userData.rings[1].rotation.y = time * 0.3;
+        }
+        
+        // Rotate satellites
+        if (client.mesh.userData.satellites) {
+          client.mesh.userData.satellites.forEach((satellite, i) => {
+            const angle = time + (i / 4) * Math.PI * 2;
+            satellite.position.x = Math.cos(angle) * 2.5;
+            satellite.position.y = Math.sin(angle) * 2.5;
+            satellite.rotation.x = time * 2;
+            satellite.rotation.y = time * 2;
+          });
+        }
+      });
+      
       processRequests().catch(console.error);
       renderer.render(scene, camera);
     }
