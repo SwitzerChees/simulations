@@ -272,7 +272,13 @@
 
     // Setup Scene
     function setupScene() {
-      // Clear existing objects
+      // Remove existing clients
+      state.clients.forEach(client => {
+        scene.remove(client.mesh);
+      });
+      state.clients = [];
+
+      // Clear other objects
       while(scene.children.length > 0) {
         scene.remove(scene.children[0]);
       }
@@ -281,63 +287,73 @@
 
       // Create clients in a circular arrangement
       const clientCount = parseInt(document.getElementById('clientCount').value);
-      state.clients = [];
       
-      // Calculate optimal arrangement
-      const baseRadius = 20; // Base radius for the circle
-      const maxRadius = 40; // Maximum radius
-      const minSpacing = 6; // Minimum space between clients
-      
-      // Calculate number of rings needed
-      const calculateRings = (count) => {
-        let rings = 1;
-        let totalFit = 0;
-        while (totalFit < count) {
-          const circumference = 2 * Math.PI * (baseRadius + (rings - 1) * 5);
-          const canFitInRing = Math.floor(circumference / minSpacing);
-          totalFit += canFitInRing;
-          if (totalFit >= count) break;
-          rings++;
-        }
-        return rings;
-      };
-      
-      const rings = calculateRings(clientCount);
-      let placed = 0;
-      
-      // Scale factor based on total count
-      const scaleFactor = Math.max(0.4, 1 - (clientCount - 1) * 0.02);
-      
-      // Place clients ring by ring
-      for (let ring = 1; ring <= rings && placed < clientCount; ring++) {
-        const ringRadius = baseRadius + (ring - 1) * 5;
-        const circumference = 2 * Math.PI * ringRadius;
-        const clientsInRing = Math.min(
-          Math.floor(circumference / minSpacing),
-          clientCount - placed
-        );
+      if (clientCount === 1) {
+        // Single client centered above load balancer
+        const client = createClientMesh();
+        client.position.set(0, 15, -15); // Centered on X axis
+        scene.add(client);
+        state.clients.push({
+          mesh: client,
+          lastRequest: 0
+        });
+      } else {
+        // Calculate optimal arrangement
+        const baseRadius = 20; // Base radius for the circle
+        const maxRadius = 40; // Maximum radius
+        const minSpacing = 6; // Minimum space between clients
         
-        for (let i = 0; i < clientsInRing; i++) {
-          const angle = (i / clientsInRing) * Math.PI * 2;
-          const client = createClientMesh();
-          
-          // Position in circle
-          client.position.set(
-            Math.cos(angle) * ringRadius,
-            15, // Height above load balancer
-            Math.sin(angle) * ringRadius - 15 // Offset back
+        // Calculate number of rings needed
+        const calculateRings = (count) => {
+          let rings = 1;
+          let totalFit = 0;
+          while (totalFit < count) {
+            const circumference = 2 * Math.PI * (baseRadius + (rings - 1) * 5);
+            const canFitInRing = Math.floor(circumference / minSpacing);
+            totalFit += canFitInRing;
+            if (totalFit >= count) break;
+            rings++;
+          }
+          return rings;
+        };
+        
+        const rings = calculateRings(clientCount);
+        let placed = 0;
+        
+        // Scale factor based on total count
+        const scaleFactor = Math.max(0.4, 1 - (clientCount - 1) * 0.02);
+        
+        // Place clients ring by ring
+        for (let ring = 1; ring <= rings && placed < clientCount; ring++) {
+          const ringRadius = baseRadius + (ring - 1) * 5;
+          const circumference = 2 * Math.PI * ringRadius;
+          const clientsInRing = Math.min(
+            Math.floor(circumference / minSpacing),
+            clientCount - placed
           );
           
-          // Scale based on ring
-          const ringScale = scaleFactor * (1 - (ring - 1) * 0.15);
-          client.scale.set(ringScale, ringScale, ringScale);
-          
-          scene.add(client);
-          state.clients.push({
-            mesh: client,
-            lastRequest: 0
-          });
-          placed++;
+          for (let i = 0; i < clientsInRing; i++) {
+            const angle = (i / clientsInRing) * Math.PI * 2;
+            const client = createClientMesh();
+            
+            // Position in circle
+            client.position.set(
+              Math.cos(angle) * ringRadius,
+              15, // Height above load balancer
+              Math.sin(angle) * ringRadius - 15 // Offset back
+            );
+            
+            // Scale based on ring
+            const ringScale = scaleFactor * (1 - (ring - 1) * 0.15);
+            client.scale.set(ringScale, ringScale, ringScale);
+            
+            scene.add(client);
+            state.clients.push({
+              mesh: client,
+              lastRequest: 0
+            });
+            placed++;
+          }
         }
       }
 
