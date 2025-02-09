@@ -273,46 +273,119 @@
     }
 
     // Animate line for request visualization
-    function animateLine(start, end, duration, color = 0x00ff00, label = '') {
-      const line = createLine(start, end, color);
-      scene.add(line);
-      state.lines.push(line);
-
-      if (state.lines.length > 50) {
-        const oldLine = state.lines.shift();
-        scene.remove(oldLine);
+    const animateLine = async (start, end, duration, color, labelText) => {
+      const adjustedDuration = duration / getGlobalSpeed();
+      
+      // Create a more interesting path with multiple control points
+      const points = [];
+      const steps = 50;
+      const radius = Math.abs(start.x - end.x) * 0.2;
+      const heightDiff = start.y - end.y;
+      
+      // Create a curved path
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        // Base position
+        const x = start.x * (1 - t) + end.x * t;
+        const y = start.y * (1 - t) + end.y * t;
+        const z = start.z * (1 - t) + end.z * t;
+        // Add wave effect
+        const wave = Math.sin(t * Math.PI * 2) * radius * (1 - t);
+        const wave2 = Math.cos(t * Math.PI * 3) * radius * 0.5 * (1 - t);
+        points.push(new THREE.Vector3(
+          x + wave * 0.3,
+          y + Math.sin(t * Math.PI) * 2,
+          z + wave2 * 0.3
+        ));
       }
-
-      // Add label if provided
-      let textSprite = null;
-      if (label) {
-        textSprite = createLabel(label);
-        const mid = new THREE.Vector3().lerpVectors(start, end, 0.5);
-        textSprite.position.copy(mid);
+      
+      // Create the main line
+      const geometry = new THREE.BufferGeometry().setFromPoints([points[0]]);
+      const material = new THREE.LineBasicMaterial({
+        color,
+        opacity: 0.8,
+        transparent: true,
+        linewidth: 2
+      });
+      const line = new THREE.Line(geometry, material);
+      
+      // Create trailing effect line
+      const trailGeometry = new THREE.BufferGeometry().setFromPoints([points[0]]);
+      const trailMaterial = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        opacity: 0.3,
+        transparent: true
+      });
+      const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+      
+      scene.add(line);
+      scene.add(trailLine);
+      
+      // Create and position label with bobbing animation
+      const textSprite = labelText ? createLabel(labelText) : null;
+      if (textSprite) {
+        const labelBasePos = points[Math.floor(points.length * 0.5)];
+        textSprite.position.copy(labelBasePos);
         scene.add(textSprite);
       }
-
-      setTimeout(() => {
-        scene.remove(line);
-        if (textSprite) scene.remove(textSprite);
-        const index = state.lines.indexOf(line);
-        if (index > -1) state.lines.splice(index, 1);
-      }, duration);
-    }
+      
+      const t0 = performance.now();
+      await new Promise(resolve => {
+        const animate = () => {
+          const t = Math.min((performance.now()-t0)/adjustedDuration, 1);
+          const numPoints = Math.floor(t * points.length);
+          
+          // Update main line
+          geometry.setFromPoints(points.slice(0, numPoints + 1));
+          
+          // Update trail (shorter, follows behind)
+          const trailStart = Math.max(0, numPoints - 10);
+          trailGeometry.setFromPoints(points.slice(trailStart, numPoints + 1));
+          
+          // Animate label position if exists
+          if (textSprite) {
+            const labelBob = Math.sin(t * Math.PI * 4) * 0.5;
+            const labelPos = points[Math.floor(points.length * t)];
+            if (labelPos) {
+              textSprite.position.copy(labelPos).add(new THREE.Vector3(0, labelBob, 0));
+            }
+          }
+          
+          // Fade out near the end
+          if (t > 0.8) {
+            const fade = (1 - t) * 5;
+            material.opacity = fade * 0.8;
+            trailMaterial.opacity = fade * 0.3;
+            if (textSprite) textSprite.material.opacity = fade;
+          }
+          
+          if(t < 1) requestAnimationFrame(animate);
+          else {
+            setTimeout(() => {
+              scene.remove(line);
+              scene.remove(trailLine);
+              if (textSprite) scene.remove(textSprite);
+              resolve();
+            }, 200);
+          }
+        };
+        animate();
+      });
+    };
 
     // Process Requests
-    function processRequests() {
+    async function processRequests() {
       const now = Date.now();
       const requestSpeed = parseInt(document.getElementById('clientSpeed').value);
       const globalSpeed = parseFloat(document.getElementById('globalSpeed').value);
 
-      state.clients.forEach(client => {
+      for (const client of state.clients) {
         if (now - client.lastRequest > requestSpeed / globalSpeed) {
           client.lastRequest = now;
           const api = selectAPI();
           
           // Animate request to load balancer
-          animateLine(
+          await animateLine(
             client.mesh.position,
             new THREE.Vector3(0, 0, 0),
             500,
@@ -320,53 +393,54 @@
             'request'
           );
 
-          // After delay, animate to selected API
-          setTimeout(() => {
-            animateLine(
-              new THREE.Vector3(0, 0, 0),
-              api.mesh.position,
-              500,
-              0x00ff00,
-              'forward'
-            );
-            
-            api.requests++;
-            api.activeConnections++;
-            state.activeConnections++;
-            
-            // Simulate API processing
-            setTimeout(() => {
-              api.activeConnections--;
-              state.activeConnections--;
-              
-              // Animate response back through load balancer
-              animateLine(
-                api.mesh.position,
-                new THREE.Vector3(0, 0, 0),
-                500,
-                0x0000ff,
-                'response'
-              );
-              
-              setTimeout(() => {
-                animateLine(
-                  new THREE.Vector3(0, 0, 0),
-                  client.mesh.position,
-                  500,
-                  0x0000ff
-                );
-                updateStats(2000);
-              }, 500);
-            }, 1000);
-          }, 500);
+          // Animate to selected API
+          await animateLine(
+            new THREE.Vector3(0, 0, 0),
+            api.mesh.position,
+            500,
+            0x00ff00,
+            'forward'
+          );
+          
+          api.requests++;
+          api.activeConnections++;
+          state.activeConnections++;
+          
+          // Simulate API processing
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          api.activeConnections--;
+          state.activeConnections--;
+          
+          // Animate response back through load balancer
+          await animateLine(
+            api.mesh.position,
+            new THREE.Vector3(0, 0, 0),
+            500,
+            0x0000ff,
+            'response'
+          );
+          
+          // Animate response back to client
+          await animateLine(
+            new THREE.Vector3(0, 0, 0),
+            client.mesh.position,
+            500,
+            0x0000ff
+          );
+          
+          updateStats(2000);
         }
-      });
+      }
     }
+
+    // Global speed multiplier
+    const getGlobalSpeed = () => parseFloat(document.getElementById('globalSpeed').value) || 1;
 
     // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
-      processRequests();
+      processRequests().catch(console.error);
       renderer.render(scene, camera);
     }
 
