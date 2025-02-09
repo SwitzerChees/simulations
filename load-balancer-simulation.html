@@ -275,14 +275,15 @@
         opacity: 0.6
       });
       
+      const rings = new THREE.Group();
       for(let i = 0; i < 3; i++) {
         const ring = new THREE.Mesh(ringGeometry, ringMat);
         ring.rotation.x = Math.PI/3 * i;
         ring.rotation.y = Math.PI/3 * i;
-        group.add(ring);
-        group.userData.rings = group.userData.rings || [];
-        group.userData.rings.push(ring);
+        rings.add(ring);
       }
+      group.add(rings);
+      group.userData.rings = rings;
       
       // Energy beams
       const beamMat = new THREE.LineBasicMaterial({ 
@@ -290,6 +291,7 @@
         linewidth: 2
       });
       
+      const beams = new THREE.Group();
       for(let i = 0; i < 6; i++) {
         const points = [];
         const angle = (i / 6) * Math.PI * 2;
@@ -305,8 +307,9 @@
           new THREE.BufferGeometry().setFromPoints(points),
           beamMat
         );
-        group.add(beam);
+        beams.add(beam);
       }
+      group.add(beams);
       
       const label = createLabel('Load Balancer');
       label.position.y = 6;
@@ -340,15 +343,16 @@
         opacity: 0.4
       });
       
+      const shields = new THREE.Group();
       for(let i = 0; i < 2; i++) {
         const shield = new THREE.Mesh(shieldGeometry, shieldMat);
         shield.rotation.x = Math.PI/2;
         shield.rotation.y = i * Math.PI;
         shield.position.y = 1;
-        group.add(shield);
-        group.userData.shields = group.userData.shields || [];
-        group.userData.shields.push(shield);
+        shields.add(shield);
       }
+      group.add(shields);
+      group.userData.shields = shields;
       
       // Holographic displays
       const hologramMat = new THREE.MeshPhongMaterial({
@@ -374,6 +378,7 @@
         holograms.add(hologram);
       }
       group.add(holograms);
+      group.userData.holograms = holograms;
       
       const label = createLabel('API');
       label.position.y = 4;
@@ -708,8 +713,10 @@
       
       // Animate load balancer
       const loadBalancer = scene.children.find(child => child.userData.rings);
-      if (loadBalancer) {
-        loadBalancer.userData.rings.forEach((ring, i) => {
+      const rings = loadBalancer?.userData?.rings?.children;
+      if (rings && rings.length > 0) {
+        // Rotate each ring individually for more interesting motion
+        rings.forEach((ring, i) => {
           ring.rotation.x = time * (0.2 + i * 0.1);
           ring.rotation.y = time * (0.3 + i * 0.1);
         });
@@ -717,10 +724,18 @@
       
       // Animate APIs
       state.apis.forEach(api => {
-        if (api.mesh.userData.shields) {
-          api.mesh.userData.shields.forEach((shield, i) => {
+        const shields = api.mesh?.userData?.shields?.children;
+        if (shields && shields.length > 0) {
+          // Rotate each shield individually
+          shields.forEach((shield, i) => {
             shield.rotation.y = time * (0.5 + i * 0.2);
           });
+        }
+        
+        const holograms = api.mesh?.userData?.holograms;
+        if (holograms) {
+          // Rotate holograms as a group
+          holograms.rotation.y = time * 0.2;
         }
       });
       
