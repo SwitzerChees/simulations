@@ -39,7 +39,11 @@
     </style>
 </head>
 <body>
-    <div id="info">CI/CD Pipeline Simulation<br>Click components to interact</div>
+    <div id="history" style="position: absolute; top: 10px; left: 10px; width: 300px; max-height: 80vh; overflow-y: auto; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="margin: 0 0 10px 0;">CI/CD Pipeline Simulation</h3>
+        <div style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Click components to interact</div>
+        <div id="historyLog" style="display: flex; flex-direction: column; gap: 5px;"></div>
+    </div>
     <div id="controls" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <button id="commitButton" style="margin: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Commit Changes</button>
         <button id="createPRButton" style="margin: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Create PR</button>
@@ -59,6 +63,14 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+
+        // Status and history management
+        const showStatus = (message) => {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.style.opacity = '1';
+            historySystem.addAction(message);
+        };
 
         // Scene setup
         const scene = new THREE.Scene();
@@ -543,12 +555,7 @@
             });
         }
 
-        // Status message handler
-        function showStatus(message) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.style.opacity = '1';
-        }
+
 
         // Particle system for code flow
         class ParticleFlow {
@@ -677,17 +684,99 @@
 
         const githubActions = new GitHubActions(components.github.mesh.position);
 
+        // History log system
+        const historySystem = {
+            actions: [],
+            addAction: function(action) {
+                const timestamp = new Date().toLocaleTimeString();
+                const actionItem = { timestamp, action, type: pipelineState.currentAction };
+                this.actions.push(actionItem);
+                this.updateHistoryLog();
+            },
+            updateHistoryLog: function() {
+                const historyLog = document.getElementById('historyLog');
+                const actionItem = this.actions[this.actions.length - 1];
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.style.padding = '8px';
+                itemDiv.style.backgroundColor = '#f5f5f5';
+                itemDiv.style.borderRadius = '4px';
+                itemDiv.style.borderLeft = '4px solid #2196F3';
+                itemDiv.style.marginBottom = '5px';
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.style.color = '#666';
+                timeSpan.style.fontSize = '0.8em';
+                timeSpan.textContent = actionItem.timestamp;
+                
+                const actionSpan = document.createElement('div');
+                actionSpan.style.marginTop = '3px';
+                actionSpan.textContent = actionItem.action;
+                
+                const replayButton = document.createElement('button');
+                replayButton.textContent = 'Replay';
+                replayButton.style.marginTop = '5px';
+                replayButton.style.padding = '4px 8px';
+                replayButton.style.backgroundColor = '#4CAF50';
+                replayButton.style.color = 'white';
+                replayButton.style.border = 'none';
+                replayButton.style.borderRadius = '3px';
+                replayButton.style.cursor = 'pointer';
+                replayButton.onclick = () => this.replayAction(actionItem);
+                
+                itemDiv.appendChild(timeSpan);
+                itemDiv.appendChild(actionSpan);
+                itemDiv.appendChild(replayButton);
+                historyLog.appendChild(itemDiv);
+                
+                // Scroll to bottom
+                historyLog.scrollTop = historyLog.scrollHeight;
+            },
+            replayAction: async function(actionItem) {
+                if (pipelineState.isProcessing) {
+                    alert('Please wait for the current action to complete');
+                    return;
+                }
+                
+                switch(actionItem.type) {
+                    case 'commit':
+                        await handleCommit();
+                        break;
+                    case 'push':
+                        if (pipelineState.hasLocalChanges) {
+                            pipelineState.currentAction = 'push';
+                            components.local.highlight();
+                            flows.gitPush.startFlow(() => {
+                                showStatus('Code pushed successfully! Click GitHub to create PR');
+                                pipelineState.canPush = false;
+                                pipelineState.canCreatePR = true;
+                                pipelineState.isProcessing = false;
+                            });
+                        }
+                        break;
+                    case 'pr':
+                        if (pipelineState.canCreatePR) {
+                            handlePRCreation();
+                        }
+                        break;
+                }
+            }
+        };
+
         // Pipeline state
         let pipelineState = {
             canPush: true,
             canCreatePR: false,
             isProcessing: false,
             canCommit: true,
-            hasLocalChanges: false
+            hasLocalChanges: false,
+            currentAction: null
         };
 
+
+
         // Commit button handler
-        document.getElementById('commitButton').addEventListener('click', async () => {
+        const handleCommit = async () => {
             if (!pipelineState.canCommit || pipelineState.isProcessing) {
                 showStatus('Please wait for the current process to complete...');
                 return;
@@ -695,6 +784,7 @@
 
             pipelineState.isProcessing = true;
             pipelineState.canCommit = false;
+            pipelineState.currentAction = 'commit';
 
             // Start the commit flow
             showStatus('Developer committing changes...');
@@ -711,7 +801,9 @@
                 pipelineState.canCommit = true;
                 pipelineState.canPush = true;
             });
-        });
+        };
+
+        document.getElementById('commitButton').addEventListener('click', handleCommit);
 
         // Animation loop
         function animate() {
@@ -773,6 +865,7 @@
                     if (component === components.local && pipelineState.canPush && pipelineState.hasLocalChanges) {
                         // Handle git push
                         pipelineState.isProcessing = true;
+                        pipelineState.currentAction = 'push';
                         if (!pipelineState.hasLocalChanges) {
                             showStatus('No local changes to push. Commit your changes first!');
                             return;
@@ -790,6 +883,7 @@
                         const handlePRCreation = async () => {
                             try {
                                 pipelineState.isProcessing = true;
+                                pipelineState.currentAction = 'pr';
                                 pipelineState.canCreatePR = false;
                                 showStatus('Creating Pull Request...');
 
