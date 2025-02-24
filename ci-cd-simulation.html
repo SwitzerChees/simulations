@@ -56,7 +56,7 @@
         scene.background = new THREE.Color(0x1a1a1a);
         
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 15;
+        camera.position.z = 30;
         camera.position.y = 5;
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -94,61 +94,255 @@
             return sprite;
         }
 
+        // Enhanced Materials with environment mapping
+        const envMap = new THREE.CubeTextureLoader()
+            .setPath('https://threejs.org/examples/textures/cube/Bridge2/')
+            .load(['posx.jpg', 'negx.jpg', 'posy.jpg', 'negy.jpg', 'posz.jpg', 'negz.jpg']);
+
+        const createMetalMaterial = (color, roughness = 0.2) => {
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.9,
+                roughness: roughness,
+                envMap: envMap,
+                envMapIntensity: 1
+            });
+        };
+
         // Components
         class Component {
-            constructor(geometry, material, position, name) {
-                this.mesh = new THREE.Mesh(geometry, material);
+            constructor(createGeometryFn, position, name, color) {
+                const group = createGeometryFn(color);
+                this.mesh = group;
                 this.mesh.position.copy(position);
                 this.name = name;
                 this.mesh.userData.component = this;
+                // Add component reference to all child meshes
+                this.mesh.traverse((child) => {
+                    child.userData.rootComponent = this;
+                });
                 scene.add(this.mesh);
 
                 // Add component label
                 const labelPos = position.clone();
-                labelPos.y += 2;
+                labelPos.y += 3;
                 this.label = createTextSprite(name, labelPos);
                 scene.add(this.label);
             }
 
             highlight() {
-                this.mesh.material.emissive.setHex(0x00ff00);
+                const highlightColor = new THREE.Color(0x00ff00);
+                const originalColors = new Map();
+                this.mesh.traverse((child) => {
+                    if (child.material && child.material.emissive) {
+                        originalColors.set(child, child.material.emissive.clone());
+                        child.material.emissive = highlightColor;
+                    }
+                });
                 setTimeout(() => {
-                    this.mesh.material.emissive.setHex(0x000000);
+                    originalColors.forEach((color, obj) => {
+                        obj.material.emissive = color;
+                    });
                 }, 1000);
             }
         }
 
-        // Create components
+        // Local Git - Repository with branching structure
+        const createLocalGit = (color) => {
+            const group = new THREE.Group();
+            
+            // Main cylinder (trunk)
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.5, 3, 8),
+                createMetalMaterial(color)
+            );
+            group.add(trunk);
+
+            // Branches
+            for (let i = 0; i < 3; i++) {
+                const branch = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.2, 2, 8),
+                    createMetalMaterial(color)
+                );
+                branch.position.y = -0.5 + i;
+                branch.rotation.z = Math.PI / 3;
+                branch.position.x = 0.8;
+                group.add(branch);
+            }
+
+            return group;
+        };
+
+        // GitHub - Octocat-inspired shape
+        const createGitHub = (color) => {
+            const group = new THREE.Group();
+
+            // Body (octagon)
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.5, 1.5, 2, 8),
+                createMetalMaterial(color)
+            );
+            group.add(body);
+
+            // Tentacles
+            for (let i = 0; i < 8; i++) {
+                const tentacle = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.5, 0.1, 8, 6),
+                    createMetalMaterial(color)
+                );
+                tentacle.rotation.y = (i / 8) * Math.PI * 2;
+                tentacle.position.y = -1;
+                group.add(tentacle);
+            }
+
+            return group;
+        };
+
+        // Build Server - Server rack with glowing components
+        const createBuildServer = (color) => {
+            const group = new THREE.Group();
+
+            // Main frame
+            const frame = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 4, 2),
+                createMetalMaterial(color, 0.5)
+            );
+            group.add(frame);
+
+            // Glowing server units
+            for (let i = 0; i < 4; i++) {
+                const unit = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.5, 0.5, 1.5),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                unit.position.y = -1.5 + i;
+                group.add(unit);
+            }
+
+            return group;
+        };
+
+        // Test Environment - Molecular structure
+        const createTestEnv = (color) => {
+            const group = new THREE.Group();
+
+            // Central sphere
+            const center = new THREE.Mesh(
+                new THREE.SphereGeometry(1, 16, 16),
+                createMetalMaterial(color)
+            );
+            group.add(center);
+
+            // Orbiting test nodes
+            for (let i = 0; i < 4; i++) {
+                const orbit = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3, 8, 8),
+                    createMetalMaterial(color)
+                );
+                const angle = (i / 4) * Math.PI * 2;
+                orbit.position.set(
+                    Math.cos(angle) * 1.5,
+                    Math.sin(angle) * 1.5,
+                    0
+                );
+                group.add(orbit);
+
+                // Connection to center
+                const line = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8),
+                    createMetalMaterial(color)
+                );
+                line.position.set(
+                    Math.cos(angle) * 0.75,
+                    Math.sin(angle) * 0.75,
+                    0
+                );
+                line.lookAt(orbit.position);
+                group.add(line);
+            }
+
+            return group;
+        };
+
+        // Production - Cloud-like structure
+        const createProduction = (color) => {
+            const group = new THREE.Group();
+
+            // Main cloud shapes
+            const shapes = [
+                new THREE.SphereGeometry(1, 16, 16),
+                new THREE.SphereGeometry(0.8, 16, 16),
+                new THREE.SphereGeometry(0.8, 16, 16),
+            ];
+
+            const positions = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(-1, 0.2, 0),
+                new THREE.Vector3(1, 0.2, 0),
+            ];
+
+            shapes.forEach((shape, i) => {
+                const cloud = new THREE.Mesh(
+                    shape,
+                    createMetalMaterial(color)
+                );
+                cloud.position.copy(positions[i]);
+                group.add(cloud);
+            });
+
+            // Add some smaller detail spheres
+            for (let i = 0; i < 5; i++) {
+                const detail = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3, 8, 8),
+                    createMetalMaterial(color)
+                );
+                const angle = (i / 5) * Math.PI * 2;
+                detail.position.set(
+                    Math.cos(angle) * 1.2,
+                    Math.sin(angle) * 0.3 + 0.5,
+                    0
+                );
+                group.add(detail);
+            }
+
+            return group;
+        };
+
+        // Create components with increased spacing
         const components = {
             local: new Component(
-                new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshPhongMaterial({ color: 0x4CAF50 }),
-                new THREE.Vector3(-8, 0, 0),
-                'Local Git'
+                createLocalGit,
+                new THREE.Vector3(-16, 0, 0),
+                'Local Git',
+                0x4CAF50
             ),
             github: new Component(
-                new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshPhongMaterial({ color: 0x2196F3 }),
-                new THREE.Vector3(-4, 0, 0),
-                'GitHub'
+                createGitHub,
+                new THREE.Vector3(-8, 0, 0),
+                'GitHub',
+                0x2196F3
             ),
             buildServer: new Component(
-                new THREE.BoxGeometry(2, 3, 2),
-                new THREE.MeshPhongMaterial({ color: 0xFF9800 }),
+                createBuildServer,
                 new THREE.Vector3(0, 0, 0),
-                'Build Server'
+                'Build Server',
+                0xFF9800
             ),
             test: new Component(
-                new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshPhongMaterial({ color: 0x9C27B0 }),
-                new THREE.Vector3(4, 0, 0),
-                'Test Env'
+                createTestEnv,
+                new THREE.Vector3(8, 0, 0),
+                'Test Env',
+                0x9C27B0
             ),
             prod: new Component(
-                new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshPhongMaterial({ color: 0xF44336 }),
-                new THREE.Vector3(8, 0, 0),
-                'Production'
+                createProduction,
+                new THREE.Vector3(16, 0, 0),
+                'Production',
+                0xF44336
             )
         };
 
@@ -352,12 +546,25 @@
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children);
+            // Get all meshes in the scene for intersection testing
+            const allMeshes = [];
+            scene.traverse((object) => {
+                if (object.isMesh) {
+                    allMeshes.push(object);
+                }
+            });
+            const intersects = raycaster.intersectObjects(allMeshes);
 
             if (intersects.length > 0 && !pipelineState.isProcessing) {
                 const object = intersects[0].object;
-                if (object.userData.component) {
-                    const component = object.userData.component;
+                // Find the root component by traversing up the parent chain
+                let current = object;
+                while (current && !current.userData.component) {
+                    current = current.parent;
+                }
+                
+                if (current && current.userData.component) {
+                    const component = current.userData.component;
                     component.highlight();
 
                     if (component === components.local && pipelineState.canPush) {
