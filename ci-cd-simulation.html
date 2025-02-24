@@ -474,23 +474,126 @@
         const createGitHub = (color) => {
             const group = new THREE.Group();
 
-            // Body (octagon)
-            const body = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.5, 1.5, 2, 8),
-                createMetalMaterial(color)
-            );
-            group.add(body);
-
-            // Tentacles
+            // Create octagon platform (GitHub logo inspired)
+            const octagonPoints = [];
             for (let i = 0; i < 8; i++) {
-                const tentacle = new THREE.Mesh(
-                    new THREE.TorusGeometry(0.5, 0.1, 8, 6),
-                    createMetalMaterial(color)
-                );
-                tentacle.rotation.y = (i / 8) * Math.PI * 2;
-                tentacle.position.y = -1;
-                group.add(tentacle);
+                const angle = (i / 8) * Math.PI * 2;
+                octagonPoints.push(new THREE.Vector2(
+                    Math.cos(angle) * 1.5,
+                    Math.sin(angle) * 1.5
+                ));
             }
+            const octagonShape = new THREE.Shape(octagonPoints);
+            const octagonGeometry = new THREE.ExtrudeGeometry(octagonShape, {
+                depth: 0.4,
+                bevelEnabled: true,
+                bevelThickness: 0.1,
+                bevelSize: 0.1,
+                bevelSegments: 3
+            });
+            
+            const platform = new THREE.Mesh(
+                octagonGeometry,
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.3,
+                    transparent: true,
+                    opacity: 0.9
+                })
+            );
+            platform.rotation.x = -Math.PI / 2;
+            group.add(platform);
+
+            // Add repository columns
+            const columns = [];
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const column = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.15, 0.15, 2, 8),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        metalness: 0.7,
+                        roughness: 0.3
+                    })
+                );
+                column.position.set(
+                    Math.cos(angle) * 1.2,
+                    1,
+                    Math.sin(angle) * 1.2
+                );
+                columns.push(column);
+                group.add(column);
+            }
+
+            // Add floating code fragments
+            const fragments = [];
+            const fragmentCount = 12;
+            for (let i = 0; i < fragmentCount; i++) {
+                const fragment = new THREE.Group();
+                
+                // Code block base
+                const block = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.4, 0.2, 0.3),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.2,
+                        transparent: true,
+                        opacity: 0.8
+                    })
+                );
+                
+                // Add "code lines"
+                const lines = new THREE.Group();
+                for (let j = 0; j < 3; j++) {
+                    const line = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.3, 0.03, 0.02),
+                        new THREE.MeshPhongMaterial({
+                            color: 0xffffff,
+                            emissive: 0xffffff,
+                            emissiveIntensity: 0.5
+                        })
+                    );
+                    line.position.y = 0.05;
+                    line.position.z = -0.1 + j * 0.1;
+                    lines.add(line);
+                }
+                
+                fragment.add(block);
+                fragment.add(lines);
+                fragment.userData.angle = (i / fragmentCount) * Math.PI * 2;
+                fragment.userData.height = Math.random() * 2;
+                fragment.userData.radius = 0.8 + Math.random() * 0.4;
+                fragment.userData.speed = 0.02 + Math.random() * 0.01;
+                fragments.push(fragment);
+                group.add(fragment);
+            }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Rotate platform slowly
+                platform.rotation.z = time * 0.1;
+
+                // Animate columns
+                columns.forEach((column, i) => {
+                    column.scale.y = 1 + Math.sin(time * 2 + i) * 0.1;
+                });
+
+                // Animate code fragments
+                fragments.forEach(fragment => {
+                    fragment.userData.angle += fragment.userData.speed;
+                    fragment.position.set(
+                        Math.cos(fragment.userData.angle) * fragment.userData.radius,
+                        fragment.userData.height + Math.sin(time * 2) * 0.2,
+                        Math.sin(fragment.userData.angle) * fragment.userData.radius
+                    );
+                    fragment.rotation.y = -fragment.userData.angle + Math.PI / 2;
+                });
+            };
 
             return group;
         };
@@ -499,26 +602,142 @@
         const createBuildServer = (color) => {
             const group = new THREE.Group();
 
-            // Main frame
-            const frame = new THREE.Mesh(
-                new THREE.BoxGeometry(3, 4, 2),
-                createMetalMaterial(color, 0.5)
+            // Create main platform
+            const platform = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.2, 4),
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.3
+                })
             );
-            group.add(frame);
+            group.add(platform);
 
-            // Glowing server units
-            for (let i = 0; i < 4; i++) {
-                const unit = new THREE.Mesh(
-                    new THREE.BoxGeometry(2.5, 0.5, 1.5),
+            // Create conveyor belt segments
+            const segments = [];
+            const segmentCount = 8;
+            for (let i = 0; i < segmentCount; i++) {
+                const segment = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 0.1, 0.3),
+                    new THREE.MeshPhongMaterial({
+                        color: 0x333333,
+                        metalness: 0.7,
+                        roughness: 0.3
+                    })
+                );
+                segment.position.z = -1.5 + (i * 0.4);
+                segments.push(segment);
+                group.add(segment);
+            }
+
+            // Add side rails
+            const railGeometry = new THREE.CylinderGeometry(0.05, 0.05, 4, 8);
+            const railMaterial = new THREE.MeshPhongMaterial({
+                color: color,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+
+            const leftRail = new THREE.Mesh(railGeometry, railMaterial);
+            leftRail.position.x = -1.2;
+            leftRail.position.y = 0.2;
+            leftRail.rotation.x = Math.PI / 2;
+            group.add(leftRail);
+
+            const rightRail = new THREE.Mesh(railGeometry, railMaterial);
+            rightRail.position.x = 1.2;
+            rightRail.position.y = 0.2;
+            rightRail.rotation.x = Math.PI / 2;
+            group.add(rightRail);
+
+            // Add processing stations
+            const stations = [];
+            const stationCount = 3;
+            for (let i = 0; i < stationCount; i++) {
+                const station = new THREE.Group();
+
+                // Station base
+                const base = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.4, 1.2, 0.4),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        metalness: 0.6,
+                        roughness: 0.4
+                    })
+                );
+                base.position.y = 0.6;
+                base.position.x = -1.5;
+                base.position.z = -1 + (i * 1.5);
+                
+                // Processing arm
+                const arm = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.2, 0.2, 0.2),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        metalness: 0.7,
+                        roughness: 0.3
+                    })
+                );
+                arm.position.x = 0.6;
+                arm.position.y = 1;
+                
+                // Tool head
+                const tool = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.15, 0.3, 8),
                     new THREE.MeshPhongMaterial({
                         color: color,
                         emissive: color,
                         emissiveIntensity: 0.5
                     })
                 );
-                unit.position.y = -1.5 + i;
-                group.add(unit);
+                tool.rotation.x = Math.PI / 2;
+                tool.position.y = -0.2;
+                
+                arm.add(tool);
+                base.add(arm);
+                station.add(base);
+                stations.push(station);
+                group.add(station);
             }
+
+            // Add status indicators
+            const indicators = [];
+            for (let i = 0; i < stationCount; i++) {
+                const indicator = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.1, 16, 16),
+                    new THREE.MeshPhongMaterial({
+                        color: 0x00ff00,
+                        emissive: 0x00ff00,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                indicator.position.set(-1.5, 1.3, -1 + (i * 1.5));
+                indicators.push(indicator);
+                group.add(indicator);
+            }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Animate conveyor segments
+                segments.forEach((segment, i) => {
+                    segment.position.z = -1.5 + ((time + i * 0.4) % 3.2);
+                });
+
+                // Animate processing stations
+                stations.forEach((station, i) => {
+                    const arm = station.children[0].children[0];
+                    arm.rotation.z = Math.sin(time * 2 + i) * 0.2;
+                });
+
+                // Animate status indicators
+                indicators.forEach((indicator, i) => {
+                    indicator.material.emissiveIntensity = 
+                        0.5 + Math.sin(time * 3 + i * 2) * 0.3;
+                });
+            };
 
             return group;
         };
