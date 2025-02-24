@@ -61,10 +61,11 @@
                 flow: {
                     particleCount: 25,
                     particleSizeRange: { min: 0.15, max: 0.3 },
-                    speed: 0.002,  // Moderate speed
+                    speed: 0.002,
                     rotationSpeed: 0.01,
-                    trailLength: 0.4,  // Moderate trail
-                    duration: 2000  // Fixed duration for flow animations
+                    trailLength: 0.3,  // Shorter trail for tighter sync
+                    duration: 2500,     // Faster animation
+                    fadeInDuration: 0.1 // Quick fade in
                 }
             },
             colors: {
@@ -945,21 +946,20 @@
             update() {
                 if (!this.isRunning) return;
 
-                // Calculate progress based on time for consistent speed
                 const elapsed = Date.now() - this.startTime;
-                this.progress = Math.min(elapsed / CONFIG.animations.flow.duration, 1 + CONFIG.animations.flow.trailLength);
+                const duration = CONFIG.animations.flow.duration;
+                this.progress = Math.min(elapsed / duration, 1);
 
                 this.particles.forEach(particle => {
                     let particleProgress = this.progress - particle.offset;
                     
-                    // Keep particles visible until the end of their trail
                     if (particleProgress > 1) {
                         particleProgress = Math.min(particleProgress, 1 + CONFIG.animations.flow.trailLength);
                     } else if (particleProgress < 0) {
                         particleProgress = 0;
                     }
                     
-                    // Position interpolation
+                    // Position with cubic easing
                     const normalizedProgress = Math.min(particleProgress, 1);
                     const easedProgress = utils.easeInOutCubic(normalizedProgress);
                     particle.mesh.position.lerpVectors(
@@ -968,27 +968,28 @@
                         easedProgress
                     );
 
-                    // Rotate the particle
+                    // Consistent rotation
                     const rotSpeed = particle.mesh.userData.rotationSpeed;
                     particle.mesh.rotation.x += rotSpeed.x;
                     particle.mesh.rotation.y += rotSpeed.y;
                     particle.mesh.rotation.z += rotSpeed.z;
 
-                    // Fade calculation
+                    // Quick fade in, gradual fade out
                     let fade = 1.0;
-                    if (particleProgress <= 0.2) { // Fade in
-                        fade = particleProgress / 0.2;
-                    } else if (particleProgress >= 1.0) { // Fade out
+                    if (particleProgress <= CONFIG.animations.flow.fadeInDuration) {
+                        fade = particleProgress / CONFIG.animations.flow.fadeInDuration;
+                    } else if (particleProgress >= 1.0) {
                         fade = 1.0 - ((particleProgress - 1.0) / CONFIG.animations.flow.trailLength);
                     }
                     
                     fade = utils.easeInOutCubic(fade);
                     particle.mesh.visible = fade > 0;
                     particle.mesh.material.opacity = fade * 0.9;
-                    particle.mesh.material.emissiveIntensity = 0.4 + fade * 0.6;
+                    particle.mesh.material.emissiveIntensity = 0.5 + fade * 0.5;
                 });
 
-                if (this.progress >= 1 + CONFIG.animations.flow.trailLength) {
+                if (elapsed >= duration) {
+                    if (this.onComplete) this.onComplete();
                     this.stop();
                 }
             }
@@ -1156,21 +1157,24 @@
             }) {
                 showStatus(status);
                 
+                // Always clear previous highlights first
+                clearAllHighlights();
+                
                 if (flow && component) {
-                    // Start flow and highlighting together
-                    clearAllHighlights();
-                    component.highlight();
-                    focusSystem.focusComponent(component);
-                    
+                    // Create a single promise for both flow and highlight
                     return new Promise((resolve) => {
+                        // Start highlight and flow together
+                        component.highlight();
+                        focusSystem.focusComponent(component);
+                        
                         flow.startFlow(() => {
                             resolve();
                         });
                     });
                 } else if (component) {
-                    clearAllHighlights();
                     component.highlight();
                     focusSystem.focusComponent(component);
+                    await utils.delay(CONFIG.animations.flow.duration);
                 }
 
                 if (action) {
