@@ -2613,8 +2613,11 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            // Update camera movement and controls
-            updateCamera();
+            // Update camera movement and tracking
+            if (!cameraTracker.isTransitioning) {
+                updateCamera();  // Only update free movement when not transitioning to a component
+            }
+            cameraTracker.update();
             controls.update();
 
             // Update component animations
