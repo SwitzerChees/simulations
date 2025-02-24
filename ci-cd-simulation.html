@@ -1825,7 +1825,6 @@
                 // At 20%, highlight target component as particles start moving
                 if (this.progress >= 0.2 && this.targetComponent && !this.hasHighlightedTarget) {
                     clearAllHighlights();
-                    console.log('highlighting target', this.targetComponent.name);
                     this.targetComponent.highlight();
                     this.hasHighlightedTarget = true;
                 }
@@ -2234,9 +2233,8 @@
             await flowManager.runPipeline([
                 {
                     status: 'Running linting...',
-                    flow: flows.actionsToBuild,
-                    targetComponent: components.buildServer,
-                    delayTime: 1000
+                    action: () => buildSteps.lint.run(),
+                    delayTime: 2000
                 }
             ]);
             
@@ -2267,9 +2265,8 @@
             // Run testing step
             await flowManager.runPipeline([{
                 status: 'Running tests...',
-                flow: flows.actionsToBuild,
-                targetComponent: components.buildServer,
-                delayTime: 1000
+                action: () => buildSteps.test.run(),
+                delayTime: 2000
             }]);
             
             if (!pipelineState.codeQuality.testing) {
@@ -2277,9 +2274,7 @@
                     {
                         status: 'Tests failed! ❌ Fix failing tests.',
                         delayTime: 1000
-                    }
-                ]);
-                await flowManager.runPipeline([
+                    },
                     {
                         status: 'Sending feedback to developer...',
                         flow: flows.buildToDev,
@@ -2299,9 +2294,8 @@
             // Run build step
             await flowManager.runPipeline([{
                 status: 'Building project...',
-                flow: flows.actionsToBuild,
-                targetComponent: components.buildServer,
-                delayTime: 1000
+                action: () => buildSteps.build.run(),
+                delayTime: 2000
             }]);
             
             if (!pipelineState.codeQuality.building) {
@@ -2330,27 +2324,6 @@
 
             // Run deployment steps if all checks passed
             try {
-                // Run each step based on code quality status
-                if (codeQuality.linting) {
-                    await runBuildStep(buildSteps.lint, 'Running linter...', 2000);
-                } else {
-                    await runBuildStep(buildSteps.lint, 'Linting failed!', 2000, true);
-                    throw new Error('Linting failed');
-                }
-
-                if (codeQuality.testing) {
-                    await runBuildStep(buildSteps.test, 'Running tests...', 3000);
-                } else {
-                    await runBuildStep(buildSteps.test, 'Tests failed!', 2000, true);
-                    throw new Error('Tests failed');
-                }
-
-                if (codeQuality.building) {
-                    await runBuildStep(buildSteps.build, 'Building...', 4000);
-                } else {
-                    await runBuildStep(buildSteps.build, 'Build failed!', 2000, true);
-                    throw new Error('Build failed');
-                }
 
                 // If all steps pass, continue with deployment
                 await flowManager.runPipeline([
