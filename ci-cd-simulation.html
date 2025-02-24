@@ -577,7 +577,8 @@
         // Create flows
         const flows = {
             gitPush: new ParticleFlow(components.local.mesh.position, components.github.mesh.position),
-            prTrigger: new ParticleFlow(components.github.mesh.position, components.buildServer.mesh.position, 0xff9800),
+            prToActions: new ParticleFlow(new THREE.Vector3(-4, 0, 0), new THREE.Vector3(-8, 6, 0), 0xFFC107),  // PR to GitHub Actions
+            actionsToBuilder: new ParticleFlow(new THREE.Vector3(-8, 6, 0), new THREE.Vector3(-8, -8, 0), 0xFF9800),  // GitHub Actions to Build Server
             deployTest: new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position, 0x9C27B0),
             deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336)
         };
@@ -679,23 +680,38 @@
                                     0xFFEB3B
                                 );
 
-                                // Highlight GitHub Actions
-                                components.githubActions.highlight();
-                                showStatus('GitHub Actions detected new PR...');
-                                
-                                // Animate GitHub Actions gears
-                                components.githubActions.mesh.children.forEach((child, index) => {
-                                    if (index > 0) { // Skip the central hexagon
-                                        const rotation = new TWEEN.Tween(child.rotation)
-                                            .to({ z: Math.PI * 2 }, 2000)
-                                            .repeat(2)
-                                            .start();
-                                    }
+                                // Show PR triggering GitHub Actions
+                                showStatus('PR triggering GitHub Actions...');
+                                flows.prToActions.startFlow(async () => {
+                                    // Highlight GitHub Actions
+                                    components.githubActions.highlight();
+                                    showStatus('GitHub Actions detected new PR...');
+                                    
+                                    // Animate GitHub Actions gears
+                                    components.githubActions.mesh.children.forEach((child, index) => {
+                                        if (index > 0) { // Skip the central hexagon
+                                            const rotation = new TWEEN.Tween(child.rotation)
+                                                .to({ z: Math.PI * 2 }, 2000)
+                                                .repeat(2)
+                                                .start();
+                                        }
+                                    });
+
+                                    // Wait for GitHub Actions to process
+                                    await new Promise(resolve => setTimeout(resolve, 2000));
+                                    showStatus('GitHub Actions dispatching jobs to Build Server...');
+
+                                    // Show GitHub Actions triggering Build Server
+                                    flows.actionsToBuilder.startFlow(async () => {
+                                        components.buildServer.highlight();
+                                        showStatus('Build Server received jobs from GitHub Actions...');
+                                        await new Promise(resolve => setTimeout(resolve, 1000));
+                                    });
                                 });
 
-                                // Wait for GitHub Actions to process
-                                await new Promise(resolve => setTimeout(resolve, 2000));
-                                showStatus('GitHub Actions triggering CI/CD pipeline...');
+                                // Wait for animations to complete
+                                await new Promise(resolve => setTimeout(resolve, 4000));
+                                showStatus('Starting CI/CD pipeline...');
 
                                 // Start build process
                                 const runBuildStep = async (status, message, delay) => {
