@@ -21,8 +21,12 @@
     <canvas class="block"></canvas>
     <div id="history" class="absolute top-2.5 left-2.5 w-[300px] max-h-[80vh] overflow-y-auto bg-white/90 p-2.5 rounded-md shadow-md">
         <h3 class="m-0 mb-2.5 text-lg font-semibold">CI/CD Pipeline Simulation</h3>
-        <div class="mb-2.5 text-sm text-gray-600">Click components to interact</div>
+        <div class="mb-2.5 text-sm text-gray-600">Pipeline Actions</div>
         <div id="historyLog" class="flex flex-col gap-1.5"></div>
+    </div>
+    <div id="componentSelector" class="absolute bottom-4 left-4 bg-white/90 p-2.5 rounded-md shadow-md">
+        <h4 class="m-0 mb-2 text-sm font-medium text-gray-600">Focus Component:</h4>
+        <div class="flex flex-wrap gap-2 max-w-[600px]"></div>
     </div>
     <div id="controls" class="absolute top-2.5 right-2.5 bg-white/90 p-2.5 rounded-md shadow-md flex flex-col gap-1.5">
         <button id="commitButton" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors duration-200 cursor-pointer">Commit Changes</button>
@@ -336,23 +340,6 @@
                 this.mesh.position.copy(position);
                 this.name = name;
                 this.mesh.userData.component = this;
-
-                // Add invisible bounding box for larger hit area
-                const boundingBox = new THREE.Box3().setFromObject(group);
-                const size = boundingBox.getSize(new THREE.Vector3());
-                const boxGeometry = new THREE.BoxGeometry(
-                    size.x * 1.75, // 1.75x size for balanced hitbox
-                    size.y * 1.75,
-                    size.z * 1.75
-                );
-                const boxMaterial = new THREE.MeshBasicMaterial({
-                    transparent: true,
-                    opacity: 0,
-                    side: THREE.BackSide
-                });
-                this.hitbox = new THREE.Mesh(boxGeometry, boxMaterial);
-                this.hitbox.userData.rootComponent = this;
-                group.add(this.hitbox);
 
                 // Add component reference to all child meshes
                 this.mesh.traverse((child) => {
@@ -2255,81 +2242,35 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Handle component clicking and hovering
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let hoveredComponent = null;
-        let mouseDownComponent = null;
-
-        // Helper function to find component at mouse position
-        const findComponentAtMouse = (event) => {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const allMeshes = [];
-            scene.traverse((object) => {
-                if (object.isMesh) {
-                    allMeshes.push(object);
-                }
-            });
-            const intersects = raycaster.intersectObjects(allMeshes);
-
-            if (intersects.length > 0) {
-                const object = intersects[0].object;
-                let current = object;
-                while (current && !current.userData.rootComponent) {
-                    current = current.parent;
-                }
-                if (current && current.userData.rootComponent) {
-                    return current.userData.rootComponent;
-                }
-            }
-            return null;
-        };
-
-        // Mouse move handler for hover effect
-        window.addEventListener('mousemove', (event) => {
-            const foundComponent = findComponentAtMouse(event);
-
-            // Update hover highlighting
-            if (foundComponent !== hoveredComponent) {
-                // Remove highlight from previously hovered component
-                if (hoveredComponent) {
-                    hoveredComponent.mesh.traverse((child) => {
-                        if (child.material && child.material.emissive) {
-                            child.material.emissive.setHex(0x000000);
-                        }
+        // Initialize component selector buttons
+        const selectorContainer = document.querySelector('#componentSelector div');
+        Object.entries(components).forEach(([key, component]) => {
+            const button = document.createElement('button');
+            button.className = 'px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium transition-colors';
+            button.textContent = component.name;
+            button.onclick = () => {
+                if (!pipelineState.isProcessing) {
+                    // Remove highlight from all components
+                    Object.values(components).forEach(c => {
+                        c.mesh.traverse((child) => {
+                            if (child.material && child.material.emissive) {
+                                child.material.emissive.setHex(0x000000);
+                            }
+                        });
                     });
-                }
-                // Add highlight to newly hovered component
-                if (foundComponent) {
-                    foundComponent.mesh.traverse((child) => {
+                    
+                    // Highlight selected component
+                    component.mesh.traverse((child) => {
                         if (child.material && child.material.emissive) {
                             child.material.emissive.setHex(0x444444);
                         }
                     });
+                    
+                    focusSystem.focusComponent(component);
+                    animate();
                 }
-                hoveredComponent = foundComponent;
-            }
-        });
-
-        // Mouse down handler
-        window.addEventListener('mousedown', (event) => {
-            mouseDownComponent = findComponentAtMouse(event);
-        });
-
-        // Mouse up handler
-        window.addEventListener('mouseup', async (event) => {
-            const mouseUpComponent = findComponentAtMouse(event);
-            
-            // Only trigger if mouseup is on the same component as mousedown
-            if (mouseUpComponent && mouseUpComponent === mouseDownComponent && !pipelineState.isProcessing) {
-                focusSystem.focusComponent(mouseUpComponent);
-                animate();
-            }
-            
-            mouseDownComponent = null;
+            };
+            selectorContainer.appendChild(button);
         });
 
         animate();
