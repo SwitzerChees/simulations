@@ -17,10 +17,26 @@
             padding: 10px;
             border-radius: 5px;
         }
+        #status {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-size: 1.2em;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
     </style>
 </head>
 <body>
     <div id="info">CI/CD Pipeline Simulation<br>Click components to interact</div>
+    <div id="status">Ready</div>
     <script type="importmap">
         {
             "imports": {
@@ -165,39 +181,78 @@
         createConnection(components.buildServer, components.test, 'Deploy to Test');
         createConnection(components.test, components.prod, 'Deploy to Prod');
 
+        // Status message handler
+        function showStatus(message) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.style.opacity = '1';
+        }
+
         // Particle system for code flow
         class ParticleFlow {
             constructor(start, end, color = 0x00ff00) {
-                this.geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                this.material = new THREE.MeshPhongMaterial({ color: color });
-                this.particle = new THREE.Mesh(this.geometry, this.material);
                 this.startPos = start;
                 this.endPos = end;
+                this.color = color;
+                this.particles = [];
                 this.progress = 0;
                 this.active = false;
                 this.onComplete = null;
-                scene.add(this.particle);
-                this.particle.visible = false;
+                this.createParticles();
+            }
+
+            createParticles() {
+                // Create multiple particles for a trail effect
+                for (let i = 0; i < 5; i++) {
+                    const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                    const material = new THREE.MeshPhongMaterial({
+                        color: this.color,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const particle = new THREE.Mesh(geometry, material);
+                    particle.visible = false;
+                    scene.add(particle);
+                    this.particles.push({
+                        mesh: particle,
+                        offset: i * 0.15 // Spread particles along the path
+                    });
+                }
             }
 
             startFlow(onComplete) {
                 this.active = true;
                 this.progress = 0;
-                this.particle.visible = true;
+                this.particles.forEach(p => p.mesh.visible = true);
                 this.onComplete = onComplete;
             }
 
             update() {
                 if (!this.active) return;
 
-                this.progress += 0.02;
-                if (this.progress >= 1) {
+                this.progress += 0.005; // Slower animation
+
+                this.particles.forEach(particle => {
+                    let particleProgress = this.progress - particle.offset;
+                    if (particleProgress < 0) particleProgress = 0;
+                    if (particleProgress > 1) particleProgress = 1;
+
+                    particle.mesh.position.lerpVectors(
+                        this.startPos,
+                        this.endPos,
+                        particleProgress
+                    );
+
+                    // Fade particles at start and end
+                    const fade = 1 - Math.abs(particleProgress - 0.5) * 2;
+                    particle.mesh.material.opacity = fade * 0.8;
+                });
+
+                if (this.progress >= 1.15) { // Account for trail length
                     this.active = false;
-                    this.particle.visible = false;
+                    this.particles.forEach(p => p.mesh.visible = false);
                     if (this.onComplete) this.onComplete();
-                    return;
                 }
-                this.particle.position.lerpVectors(this.startPos, this.endPos, this.progress);
             }
         }
 
@@ -308,7 +363,9 @@
                     if (component === components.local && pipelineState.canPush) {
                         // Handle git push
                         pipelineState.isProcessing = true;
+                        showStatus('Pushing code changes to GitHub...');
                         flows.gitPush.startFlow(() => {
+                            showStatus('Code pushed successfully! Click GitHub to create PR');
                             pipelineState.canPush = false;
                             pipelineState.canCreatePR = true;
                             pipelineState.isProcessing = false;
@@ -318,16 +375,21 @@
                         // Handle PR creation and GitHub Actions
                         pipelineState.isProcessing = true;
                         pipelineState.canCreatePR = false;
+                        showStatus('Creating Pull Request...');
                         
                         // Run GitHub Actions
                         githubActions.runProcess().then(() => {
+                            showStatus('CI checks passed! Triggering build...');
                             // Trigger build server
                             flows.prTrigger.startFlow(() => {
+                                showStatus('Build successful! Deploying to Test...');
                                 // Deploy to test
                                 flows.deployTest.startFlow(() => {
+                                    showStatus('Test deployment successful! Deploying to Production...');
                                     // Deploy to prod
                                     flows.deployProd.startFlow(() => {
                                         // Reset pipeline
+                                        showStatus('Deployment complete! Ready for next changes.');
                                         pipelineState.isProcessing = false;
                                         pipelineState.canPush = true;
                                         githubActions.reset();
