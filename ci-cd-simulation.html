@@ -166,41 +166,109 @@
         createConnection(components.test, components.prod, 'Deploy to Prod');
 
         // Particle system for code flow
-        const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-        const particleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-
         class ParticleFlow {
-            constructor(start, end) {
-                this.particle = new THREE.Mesh(particleGeometry, particleMaterial);
-                this.start = start;
-                this.end = end;
+            constructor(start, end, color = 0x00ff00) {
+                this.geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                this.material = new THREE.MeshPhongMaterial({ color: color });
+                this.particle = new THREE.Mesh(this.geometry, this.material);
+                this.startPos = start;
+                this.endPos = end;
                 this.progress = 0;
+                this.active = false;
+                this.onComplete = null;
                 scene.add(this.particle);
+                this.particle.visible = false;
+            }
+
+            startFlow(onComplete) {
+                this.active = true;
+                this.progress = 0;
+                this.particle.visible = true;
+                this.onComplete = onComplete;
             }
 
             update() {
-                this.progress += 0.01;
-                if (this.progress > 1) {
-                    this.progress = 0;
+                if (!this.active) return;
+
+                this.progress += 0.02;
+                if (this.progress >= 1) {
+                    this.active = false;
+                    this.particle.visible = false;
+                    if (this.onComplete) this.onComplete();
+                    return;
                 }
-                this.particle.position.lerpVectors(this.start, this.end, this.progress);
+                this.particle.position.lerpVectors(this.startPos, this.endPos, this.progress);
             }
         }
 
-        const flows = [
-            new ParticleFlow(components.local.mesh.position, components.github.mesh.position),
-            new ParticleFlow(components.github.mesh.position, components.buildServer.mesh.position),
-            new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position),
-            new ParticleFlow(components.test.mesh.position, components.prod.mesh.position)
-        ];
+        // GitHub Actions visualization
+        class GitHubActions {
+            constructor(position) {
+                this.position = position.clone();
+                this.position.y += 1;
+                this.processes = ['lint', 'test', 'build'];
+                this.currentProcess = -1;
+                this.processLabels = this.processes.map((process, index) => {
+                    const label = createTextSprite(process, 
+                        new THREE.Vector3(position.x - 1 + index, position.y + 1, position.z));
+                    label.visible = false;
+                    scene.add(label);
+                    return label;
+                });
+            }
+
+            async runProcess() {
+                this.currentProcess = -1;
+                for (let i = 0; i < this.processes.length; i++) {
+                    this.currentProcess = i;
+                    this.processLabels[i].visible = true;
+                    this.processLabels[i].material.map.dispose();
+                    this.processLabels[i] = createTextSprite(
+                        `${this.processes[i]} ⏳`,
+                        this.processLabels[i].position
+                    );
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    this.processLabels[i].material.map.dispose();
+                    this.processLabels[i] = createTextSprite(
+                        `${this.processes[i]} ✓`,
+                        this.processLabels[i].position
+                    );
+                }
+                return new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            reset() {
+                this.processLabels.forEach(label => {
+                    label.visible = false;
+                });
+                this.currentProcess = -1;
+            }
+        }
+
+        // Create flows
+        const flows = {
+            gitPush: new ParticleFlow(components.local.mesh.position, components.github.mesh.position),
+            prTrigger: new ParticleFlow(components.github.mesh.position, components.buildServer.mesh.position, 0xff9800),
+            deployTest: new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position, 0x9C27B0),
+            deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336)
+        };
+
+        const githubActions = new GitHubActions(components.github.mesh.position);
+
+        // Pipeline state
+        let pipelineState = {
+            canPush: true,
+            canCreatePR: false,
+            isProcessing: false
+        };
 
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
 
-            // Update particle flows
-            flows.forEach(flow => flow.update());
+            // Update flows
+            Object.values(flows).forEach(flow => flow.update());
 
             // Update labels to face camera
             Object.values(components).forEach(component => {
@@ -231,10 +299,43 @@
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(scene.children);
 
-            if (intersects.length > 0) {
+            if (intersects.length > 0 && !pipelineState.isProcessing) {
                 const object = intersects[0].object;
                 if (object.userData.component) {
-                    object.userData.component.highlight();
+                    const component = object.userData.component;
+                    component.highlight();
+
+                    if (component === components.local && pipelineState.canPush) {
+                        // Handle git push
+                        pipelineState.isProcessing = true;
+                        flows.gitPush.startFlow(() => {
+                            pipelineState.canPush = false;
+                            pipelineState.canCreatePR = true;
+                            pipelineState.isProcessing = false;
+                        });
+                    } 
+                    else if (component === components.github && pipelineState.canCreatePR) {
+                        // Handle PR creation and GitHub Actions
+                        pipelineState.isProcessing = true;
+                        pipelineState.canCreatePR = false;
+                        
+                        // Run GitHub Actions
+                        githubActions.runProcess().then(() => {
+                            // Trigger build server
+                            flows.prTrigger.startFlow(() => {
+                                // Deploy to test
+                                flows.deployTest.startFlow(() => {
+                                    // Deploy to prod
+                                    flows.deployProd.startFlow(() => {
+                                        // Reset pipeline
+                                        pipelineState.isProcessing = false;
+                                        pipelineState.canPush = true;
+                                        githubActions.reset();
+                                    });
+                                });
+                            });
+                        });
+                    }
                 }
             }
         });
