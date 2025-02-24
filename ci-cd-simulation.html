@@ -742,88 +742,288 @@
             return group;
         };
 
-        // Test Environment - Molecular structure
+        // Create Test Environment - Virtual Testing Lab
         const createTestEnv = (color) => {
             const group = new THREE.Group();
 
-            // Central sphere
-            const center = new THREE.Mesh(
-                new THREE.SphereGeometry(1, 16, 16),
-                createMetalMaterial(color)
+            // Create main testing chamber (hexagonal)
+            const chamberGeometry = new THREE.CylinderGeometry(1.5, 1.5, 1.2, 6);
+            const chamber = new THREE.Mesh(
+                chamberGeometry,
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.7,
+                    emissive: color,
+                    emissiveIntensity: 0.2
+                })
             );
-            group.add(center);
+            chamber.rotation.x = Math.PI / 2;
+            group.add(chamber);
 
-            // Orbiting test nodes
-            for (let i = 0; i < 4; i++) {
-                const orbit = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.3, 8, 8),
-                    createMetalMaterial(color)
+            // Add test pods around the chamber
+            const pods = [];
+            const podCount = 6;
+            for (let i = 0; i < podCount; i++) {
+                const pod = new THREE.Group();
+                
+                // Pod base
+                const base = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.4, 0.4, 0.4),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        metalness: 0.7,
+                        roughness: 0.3
+                    })
                 );
-                const angle = (i / 4) * Math.PI * 2;
-                orbit.position.set(
-                    Math.cos(angle) * 1.5,
-                    Math.sin(angle) * 1.5,
-                    0
+                
+                // Pod scanner
+                const scanner = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.1, 0.6, 8),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5
+                    })
                 );
-                group.add(orbit);
-
-                // Connection to center
-                const line = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8),
-                    createMetalMaterial(color)
+                scanner.rotation.x = Math.PI / 2;
+                scanner.position.z = 0.3;
+                
+                pod.add(base);
+                pod.add(scanner);
+                
+                const angle = (i / podCount) * Math.PI * 2;
+                pod.position.set(
+                    Math.cos(angle) * 2,
+                    0,
+                    Math.sin(angle) * 2
                 );
-                line.position.set(
-                    Math.cos(angle) * 0.75,
-                    Math.sin(angle) * 0.75,
-                    0
-                );
-                line.lookAt(orbit.position);
-                group.add(line);
+                pod.rotation.y = -angle + Math.PI / 2;
+                
+                pods.push(pod);
+                group.add(pod);
             }
 
+            // Add scanning beams
+            const beams = [];
+            for (let i = 0; i < podCount; i++) {
+                const beam = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.02, 0.02, 2, 8),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.3,
+                        emissive: color,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                beam.rotation.x = Math.PI / 2;
+                beam.rotation.z = (i / podCount) * Math.PI * 2;
+                beams.push(beam);
+                group.add(beam);
+            }
+
+            // Add holographic test results
+            const results = [];
+            for (let i = 0; i < 3; i++) {
+                const result = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.4, 0.1),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.5,
+                        emissive: color,
+                        emissiveIntensity: 0.3,
+                        side: THREE.DoubleSide
+                    })
+                );
+                result.position.y = 0.8 - (i * 0.15);
+                results.push(result);
+                group.add(result);
+            }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Rotate chamber slowly
+                chamber.rotation.z = time * 0.1;
+
+                // Animate pods
+                pods.forEach((pod, i) => {
+                    pod.position.y = Math.sin(time * 2 + i) * 0.1;
+                    const scanner = pod.children[1];
+                    scanner.rotation.z = Math.sin(time * 3 + i) * 0.2;
+                });
+
+                // Animate beams
+                beams.forEach((beam, i) => {
+                    beam.material.opacity = 0.3 + Math.sin(time * 3 + i) * 0.2;
+                    beam.scale.y = 0.8 + Math.sin(time * 2 + i) * 0.2;
+                });
+
+                // Animate results
+                results.forEach((result, i) => {
+                    result.material.opacity = 0.5 + Math.sin(time * 2 + i) * 0.2;
+                    result.rotation.y = time;
+                });
+            };
             return group;
         };
 
-        // Production - Cloud-like structure
+        // Production Environment - Cloud Data Center
         const createProduction = (color) => {
             const group = new THREE.Group();
 
-            // Main cloud shapes
-            const shapes = [
-                new THREE.SphereGeometry(1, 16, 16),
-                new THREE.SphereGeometry(0.8, 16, 16),
-                new THREE.SphereGeometry(0.8, 16, 16),
-            ];
+            // Create main platform
+            const platform = new THREE.Mesh(
+                new THREE.BoxGeometry(4, 0.2, 3),
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    metalness: 0.7,
+                    roughness: 0.3
+                })
+            );
+            group.add(platform);
 
-            const positions = [
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(-1, 0.2, 0),
-                new THREE.Vector3(1, 0.2, 0),
-            ];
+            // Create server racks
+            const racks = [];
+            const rackRows = 2;
+            const racksPerRow = 3;
+            
+            for (let row = 0; row < rackRows; row++) {
+                for (let col = 0; col < racksPerRow; col++) {
+                    const rack = new THREE.Group();
+                    
+                    // Rack frame
+                    const frame = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.8, 1.5, 0.6),
+                        new THREE.MeshPhongMaterial({
+                            color: color,
+                            metalness: 0.8,
+                            roughness: 0.2
+                        })
+                    );
+                    
+                    // Add server units
+                    const unitCount = 5;
+                    const units = [];
+                    for (let i = 0; i < unitCount; i++) {
+                        const unit = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.7, 0.2, 0.5),
+                            new THREE.MeshPhongMaterial({
+                                color: color,
+                                emissive: color,
+                                emissiveIntensity: 0.3
+                            })
+                        );
+                        unit.position.y = -0.6 + (i * 0.25);
+                        units.push(unit);
+                        rack.add(unit);
+                    }
+                    
+                    rack.add(frame);
+                    rack.position.set(
+                        -1.5 + col * 1.5,
+                        0.85,
+                        -0.8 + row * 1.6
+                    );
+                    racks.push({ frame: rack, units: units });
+                    group.add(rack);
+                }
+            }
 
-            shapes.forEach((shape, i) => {
-                const cloud = new THREE.Mesh(
-                    shape,
-                    createMetalMaterial(color)
+            // Add network connections
+            const connections = [];
+            for (let i = 0; i < racks.length - 1; i++) {
+                const start = racks[i].frame.position;
+                const end = racks[i + 1].frame.position;
+                
+                const curve = new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(start.x, start.y + 0.8, start.z),
+                    new THREE.Vector3(
+                        (start.x + end.x) / 2,
+                        start.y + 1,
+                        (start.z + end.z) / 2
+                    ),
+                    new THREE.Vector3(end.x, end.y + 0.8, end.z)
+                ]);
+
+                const tubeGeometry = new THREE.TubeGeometry(
+                    curve,
+                    8,    // tubular segments
+                    0.03, // radius
+                    8,    // radial segments
+                    false // closed
                 );
-                cloud.position.copy(positions[i]);
-                group.add(cloud);
-            });
 
-            // Add some smaller detail spheres
-            for (let i = 0; i < 5; i++) {
-                const detail = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.3, 8, 8),
-                    createMetalMaterial(color)
+                const connection = new THREE.Mesh(
+                    tubeGeometry,
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.3,
+                        emissive: color,
+                        emissiveIntensity: 0.3
+                    })
                 );
-                const angle = (i / 5) * Math.PI * 2;
-                detail.position.set(
-                    Math.cos(angle) * 1.2,
-                    Math.sin(angle) * 0.3 + 0.5,
+                connections.push(connection);
+                group.add(connection);
+            }
+
+            // Add floating status indicators
+            const indicators = [];
+            for (let i = 0; i < 4; i++) {
+                const indicator = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.3, 0.08),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.7,
+                        emissive: color,
+                        emissiveIntensity: 0.3,
+                        side: THREE.DoubleSide
+                    })
+                );
+                indicator.position.set(
+                    -1.5 + i * 1,
+                    2,
                     0
                 );
-                group.add(detail);
+                indicators.push(indicator);
+                group.add(indicator);
             }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Animate server units
+                racks.forEach((rack, i) => {
+                    rack.units.forEach((unit, j) => {
+                        unit.material.emissiveIntensity = 
+                            0.3 + Math.sin(time * 2 + i + j) * 0.2;
+                    });
+                });
+
+                // Animate network connections
+                connections.forEach((connection, i) => {
+                    connection.material.opacity = 
+                        0.3 + Math.sin(time * 3 + i) * 0.1;
+                    connection.material.emissiveIntensity = 
+                        0.3 + Math.sin(time * 2 + i) * 0.2;
+                });
+
+                // Animate status indicators
+                indicators.forEach((indicator, i) => {
+                    indicator.position.y = 
+                        2 + Math.sin(time * 1.5 + i) * 0.1;
+                    indicator.material.opacity = 
+                        0.7 + Math.sin(time * 2 + i) * 0.2;
+                });
+            };
 
             return group;
         };
