@@ -77,20 +77,19 @@
                 if (!component || !component.mesh) return;
                 this.currentComponent = component;
                 
-                // Calculate camera position
-                const distance = 15;
-                const targetPosition = component.mesh.position.clone();
-                targetPosition.z += distance;
+                // First move the camera target
+                new TWEEN.Tween(controls.target)
+                    .to(component.mesh.position, this.transitionDuration)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .start();
+
+                // Calculate ideal camera position (15 units back from target)
+                const direction = camera.position.clone().sub(controls.target).normalize();
+                const targetPosition = component.mesh.position.clone().add(direction.multiplyScalar(15));
 
                 // Move camera position
                 new TWEEN.Tween(camera.position)
                     .to(targetPosition, this.transitionDuration)
-                    .easing(TWEEN.Easing.Cubic.InOut)
-                    .start();
-
-                // Move camera target
-                new TWEEN.Tween(controls.target)
-                    .to(component.mesh.position, this.transitionDuration)
                     .easing(TWEEN.Easing.Cubic.InOut)
                     .start();
             },
