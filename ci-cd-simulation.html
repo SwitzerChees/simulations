@@ -77,24 +77,45 @@
                 if (!component || !component.mesh) return;
                 this.currentComponent = component;
                 
-                // Smoothly move camera target to component
+                // Calculate camera position
+                const distance = 15;
+                const targetPosition = component.mesh.position.clone();
+                targetPosition.z += distance;
+
+                // Move camera position
+                new TWEEN.Tween(camera.position)
+                    .to(targetPosition, this.transitionDuration)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .start();
+
+                // Move camera target
                 new TWEEN.Tween(controls.target)
                     .to(component.mesh.position, this.transitionDuration)
                     .easing(TWEEN.Easing.Cubic.InOut)
                     .start();
             },
 
-            focusSequence: async function(fromComponent, toComponent, duration = 2000) {
-                // Focus on sending component
-                this.focusComponent(fromComponent);
+            focusSequence: function(fromComponent, toComponent) {
+                if (!fromComponent || !toComponent) return;
                 
-                // Wait for the first focus to complete
-                await new Promise(resolve => setTimeout(resolve, this.transitionDuration));
+                // Highlight start component
+                fromComponent.highlight();
                 
-                // Then focus on receiving component
+                // Start camera movement after a short delay
                 setTimeout(() => {
                     this.focusComponent(toComponent);
-                }, duration - this.transitionDuration);
+                    
+                    // Remove highlight from start component and highlight end component
+                    // halfway through the camera movement
+                    setTimeout(() => {
+                        fromComponent.mesh.traverse((child) => {
+                            if (child.material && child.material.emissive) {
+                                child.material.emissive.setHex(0x000000);
+                            }
+                        });
+                        toComponent.highlight();
+                    }, this.transitionDuration / 2);
+                }, 500);
             }
         };
         
