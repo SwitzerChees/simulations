@@ -226,56 +226,94 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         
-        // Component focus system
-        const focusSystem = {
-            currentComponent: null,
-            transitionDuration: 1000, // ms
-            
-            focusComponent: function(component) {
+        // Smooth camera tracking system
+        class CameraTracker {
+            constructor(camera, controls) {
+                this.camera = camera;
+                this.controls = controls;
+                this.targetPosition = camera.position.clone();
+                this.targetLookAt = new THREE.Vector3();
+                this.currentComponent = null;
+                this.isTransitioning = false;
+                this.transitionDuration = 1500; // ms
+                
+                // Store original control settings
+                this.originalDamping = {
+                    enableDamping: controls.enableDamping,
+                    dampingFactor: controls.dampingFactor
+                };
+            }
+
+            focusComponent(component) {
                 if (!component || !component.mesh) return;
                 this.currentComponent = component;
                 
-                // First move the camera target
-                new TWEEN.Tween(controls.target)
-                    .to(component.mesh.position, this.transitionDuration)
-                    .easing(TWEEN.Easing.Cubic.InOut)
-                    .start();
-
-                // Calculate ideal camera position (15 units back from target)
-                const direction = camera.position.clone().sub(controls.target).normalize();
-                const targetPosition = component.mesh.position.clone().add(direction.multiplyScalar(15));
-
-                // Move camera position
-                new TWEEN.Tween(camera.position)
-                    .to(targetPosition, this.transitionDuration)
-                    .easing(TWEEN.Easing.Cubic.InOut)
-                    .start();
-            },
-
-            focusSequence: function(fromComponent, toComponent) {
-                if (!fromComponent || !toComponent) return;
+                // Calculate ideal camera position based on component size
+                const bbox = new THREE.Box3().setFromObject(component.mesh);
+                const size = bbox.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
                 
-                // Highlight start component
-                fromComponent.highlight();
+                // Position camera at an offset based on component size
+                const offset = new THREE.Vector3(
+                    maxDim * 1.5,
+                    maxDim * 0.75,
+                    maxDim * 1.5
+                );
                 
-                // Start camera movement after a short delay
-                setTimeout(() => {
-                    this.focusComponent(toComponent);
-                    
-                    // Remove highlight from start component and highlight end component
-                    // halfway through the camera movement
-                    setTimeout(() => {
-                        fromComponent.mesh.traverse((child) => {
-                            if (child.material && child.material.emissive) {
-                                child.material.emissive.setHex(0x000000);
-                            }
-                        });
-                        toComponent.highlight();
-                    }, this.transitionDuration / 2);
-                }, 500);
+                this.targetPosition.copy(component.mesh.position).add(offset);
+                this.targetLookAt.copy(component.mesh.position);
+                
+                // Enable smooth controls during transition
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                
+                this.isTransitioning = true;
+                this.startTime = Date.now();
+            }
+
+            update() {
+                if (!this.isTransitioning) return;
+
+                const elapsed = Date.now() - this.startTime;
+                const progress = Math.min(elapsed / this.transitionDuration, 1);
+                const t = utils.easeInOutCubic(progress);
+                
+                // Smoothly interpolate camera position
+                this.camera.position.lerp(this.targetPosition, t * 0.1);
+                
+                // Update controls target with smooth interpolation
+                this.controls.target.lerp(this.targetLookAt, t * 0.1);
+                
+                // Restore original control settings when transition completes
+                if (progress >= 1) {
+                    this.controls.enableDamping = this.originalDamping.enableDamping;
+                    this.controls.dampingFactor = this.originalDamping.dampingFactor;
+                    this.isTransitioning = false;
+                }
+            }
+        }
+        
+        const cameraTracker = new CameraTracker(camera, controls);
+        
+        // Component focus system
+        const focusSystem = {
+            focusComponent: function(component) {
+                if (!component || !component.mesh) return;
+                cameraTracker.focusComponent(component);
             }
         };
-        
+
+        // Add sequence focus capability
+        const focusSequence = {
+            start: function(fromComponent, toComponent) {
+                if (!fromComponent || !toComponent) return;
+                focusSystem.focusComponent(fromComponent);
+                setTimeout(() => {
+                    focusSystem.focusComponent(toComponent);
+                }, 1500);
+            }
+        };
+
         // Helper function to clear all highlights
         const clearAllHighlights = () => {
             Object.values(components).forEach(component => {
@@ -2037,7 +2075,7 @@
         document.getElementById('commitButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing) {
                 handleCommit();
-                focusSystem.focusSequence(components.developer, components.local);
+                focusSequence.start(components.developer, components.local);
             }
         });
 
@@ -2045,7 +2083,7 @@
         document.getElementById('pushButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canPush && pipelineState.hasLocalChanges) {
                 handleGitPush();
-                focusSystem.focusSequence(components.local, components.github);
+                focusSequence.start(components.local, components.github);
             } else {
                 showStatus('Cannot push: Ensure you have committed changes and no process is running');
             }
@@ -2055,7 +2093,7 @@
         document.getElementById('createPRButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canCreatePR) {
                 handlePRCreation();
-                focusSystem.focusSequence(components.github, components.githubActions);
+                focusSequence.start(components.github, components.githubActions);
             } else {
                 showStatus('Cannot create PR: Ensure you have pushed changes and no process is running');
             }
@@ -2207,8 +2245,10 @@
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Update camera tracking
+            cameraTracker.update();
             controls.update();
-            TWEEN.update();
 
             // Update component animations
             Object.values(components).forEach(component => {
