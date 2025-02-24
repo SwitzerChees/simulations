@@ -45,8 +45,155 @@
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
-        // Helper functions
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        // Configuration
+        const CONFIG = {
+            animations: {
+                defaultDuration: 2000,
+                buildStep: {
+                    phases: [
+                        { duration: 1000, progress: 0.2 },  // Initial phase
+                        { duration: 1500, progress: 0.5 },  // Middle phase
+                        { duration: 1000, progress: 0.8 },  // Almost done
+                        { duration: 500, progress: 1.0 }    // Completion
+                    ],
+                    pauseBetweenPhases: 200
+                },
+                flow: {
+                    particleCount: 20,
+                    particleSize: 0.1,
+                    speed: 0.02
+                }
+            },
+            colors: {
+                success: 0x4CAF50,
+                warning: 0xFFC107,
+                error: 0xFF5252,
+                inactive: 0xcccccc,
+                highlight: 0x2196F3
+            }
+        };
+
+        // Utility functions
+        const utils = {
+            delay: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+
+            easeInOutCubic: (t) => t < 0.5
+                ? 4 * t * t * t
+                : 1 - Math.pow(-2 * t + 2, 3) / 2,
+                
+            pulseEffect: (mesh, startIntensity = 1) => {
+                const originalIntensity = startIntensity;
+                let intensity = originalIntensity;
+                let increasing = false;
+                let isRunning = true;
+
+                const animate = () => {
+                    if (!isRunning) return;
+
+                    if (increasing) {
+                        intensity += 0.05;
+                        if (intensity >= originalIntensity + 0.5) increasing = false;
+                    } else {
+                        intensity -= 0.05;
+                        if (intensity <= originalIntensity - 0.5) increasing = true;
+                    }
+
+                    if (mesh.material) {
+                        if (mesh.material.emissiveIntensity !== undefined) {
+                            mesh.material.emissiveIntensity = intensity;
+                        }
+                        if (mesh.material.intensity !== undefined) {
+                            mesh.material.intensity = intensity;
+                        }
+                    }
+
+                    requestAnimationFrame(animate);
+                };
+
+                animate();
+                return () => {
+                    isRunning = false;
+                    if (mesh.material) {
+                        if (mesh.material.emissiveIntensity !== undefined) {
+                            mesh.material.emissiveIntensity = originalIntensity;
+                        }
+                        if (mesh.material.intensity !== undefined) {
+                            mesh.material.intensity = originalIntensity;
+                        }
+                    }
+                };
+            },
+
+            animateProgress: async ({ 
+                onProgress, 
+                duration, 
+                easing = utils.easeInOutCubic,
+                startValue = 0,
+                endValue = 1
+            }) => {
+                const startTime = Date.now();
+                return new Promise(resolve => {
+                    const animate = () => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        const easedProgress = easing(progress);
+                        const currentValue = startValue + (endValue - startValue) * easedProgress;
+                        
+                        onProgress(currentValue);
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            resolve();
+                        }
+                    };
+                    animate();
+                });
+            },
+
+            pulseEffect: (mesh, startIntensity, callback) => {
+                let running = true;
+                const animate = () => {
+                    if (!running) return;
+                    mesh.material.emissiveIntensity = startIntensity + Math.sin(Date.now() * 0.005) * 0.3;
+                    requestAnimationFrame(animate);
+                };
+                animate();
+                return () => { running = false; };
+            }
+        };
+
+        // Base class for animated entities
+        class AnimatedEntity {
+            constructor() {
+                this.isRunning = false;
+                this.stopPulse = null;
+            }
+
+            startPulse(mesh, startIntensity) {
+                if (this.stopPulse) this.stopPulse();
+                this.stopPulse = utils.pulseEffect(mesh, startIntensity);
+            }
+
+            stopPulseEffect() {
+                if (this.stopPulse) {
+                    this.stopPulse();
+                    this.stopPulse = null;
+                }
+            }
+
+            async animateWithPhases(phases, updateFn) {
+                for (const phase of phases) {
+                    await utils.animateProgress({
+                        duration: phase.duration,
+                        startValue: phase.start,
+                        endValue: phase.end,
+                        onProgress: updateFn
+                    });
+                    if (phase.end < 1) await utils.delay(CONFIG.animations.buildStep.pauseBetweenPhases);
+                }
+            }
+        }
 
         // Status and history management
         const showStatus = (message) => {
@@ -544,13 +691,13 @@
         };
 
         // Build Step visualization
-        class BuildStep {
+        class BuildStep extends AnimatedEntity {
             constructor(name, position, color) {
+                super();
                 this.name = name;
                 this.position = position;
                 this.color = color;
                 this.progress = 0;
-                this.isRunning = false;
                 this.isComplete = false;
                 this.isSuccess = false;
 
@@ -593,58 +740,24 @@
                 this.progressMesh.visible = true;
                 this.mesh.material.opacity = 0.8;
 
-                // Make the bar pulse while running
-                const startEmissive = this.mesh.material.emissiveIntensity;
-                const pulseAnimation = () => {
-                    if (this.isRunning) {
-                        this.mesh.material.emissiveIntensity = startEmissive + Math.sin(Date.now() * 0.005) * 0.3;
-                        requestAnimationFrame(pulseAnimation);
-                    }
-                };
-                pulseAnimation();
+                // Start pulsing effect
+                this.startPulse(this.mesh, this.mesh.material.emissiveIntensity);
 
-                // Simulate different phases of the process
-                const phases = [
-                    { duration: 1000, progress: 0.2 },  // Initial phase
-                    { duration: 1500, progress: 0.5 },  // Middle phase
-                    { duration: 1000, progress: 0.8 },  // Almost done
-                    { duration: 500, progress: 1.0 }    // Completion
-                ];
+                // Convert config phases to animation phases
+                const phases = CONFIG.animations.buildStep.phases.map((phase, index, arr) => ({
+                    duration: phase.duration,
+                    start: index === 0 ? 0 : arr[index - 1].progress,
+                    end: phase.progress
+                }));
 
-                for (const phase of phases) {
-                    const startProgress = this.progress;
-                    const progressDiff = phase.progress - startProgress;
-                    const startTime = Date.now();
-
-                    await new Promise(resolve => {
-                        const animate = () => {
-                            const elapsed = Date.now() - startTime;
-                            const progress = Math.min(elapsed / phase.duration, 1);
-                            
-                            // Use easeInOutCubic for smoother animation
-                            const eased = progress < 0.5
-                                ? 4 * progress * progress * progress
-                                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-                            this.progress = startProgress + (progressDiff * eased);
-                            this.progressMesh.position.x = this.position.x - 1 + (this.progress * 2);
-                            
-                            if (progress < 1) {
-                                requestAnimationFrame(animate);
-                            } else {
-                                resolve();
-                            }
-                        };
-                        animate();
-                    });
-
-                    // Add a small pause between phases
-                    if (phase.progress < 1) {
-                        await delay(200);
-                    }
-                }
+                // Animate through phases
+                await this.animateWithPhases(phases, (progress) => {
+                    this.progress = progress;
+                    this.progressMesh.position.x = this.position.x - 1 + (progress * 2);
+                });
 
                 this.isRunning = false;
+                this.stopPulseEffect();
                 this.complete(shouldSucceed);
             }
 
@@ -655,19 +768,14 @@
                 this.progressMesh.visible = false;
 
                 // Update appearance based on result
-                if (success) {
-                    this.mesh.material.color.setHex(0x4CAF50);  // Green
-                    this.mesh.material.emissive.setHex(0x4CAF50);
-                    this.label.material.map.dispose();
-                    this.label = createTextSprite(`${this.name} ✓`, 
-                        new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
-                } else {
-                    this.mesh.material.color.setHex(0xFF5252);  // Red
-                    this.mesh.material.emissive.setHex(0xFF5252);
-                    this.label.material.map.dispose();
-                    this.label = createTextSprite(`${this.name} ✗`, 
-                        new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
-                }
+                const resultColor = success ? CONFIG.colors.success : CONFIG.colors.error;
+                this.mesh.material.color.setHex(resultColor);
+                this.mesh.material.emissive.setHex(resultColor);
+                this.label.material.map.dispose();
+                this.label = createTextSprite(
+                    `${this.name} ${success ? '✓' : '✗'}`,
+                    new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z)
+                );
             }
 
             reset() {
@@ -679,9 +787,12 @@
                 this.mesh.material.color.setHex(this.color);
                 this.mesh.material.emissive.setHex(this.color);
                 this.mesh.material.opacity = 0.5;
+                this.stopPulseEffect();
                 this.label.material.map.dispose();
-                this.label = createTextSprite(this.name, 
-                    new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
+                this.label = createTextSprite(
+                    this.name,
+                    new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z)
+                );
             }
         }
 
@@ -743,27 +854,29 @@
         }
 
         // Particle system for code flow
-        class ParticleFlow {
-            constructor(start, end, color = 0x00ff00) {
+        class ParticleFlow extends AnimatedEntity {
+            constructor(start, end, color = CONFIG.colors.success) {
+                super();
                 this.startPos = typeof start === 'object' && start.mesh ? start.mesh.position : start;
                 this.endPos = typeof end === 'object' && end.mesh ? end.mesh.position : end;
                 this.color = color;
                 this.particles = [];
                 this.progress = 0;
-                this.active = false;
                 this.onComplete = null;
                 this.createParticles();
             }
 
             createParticles() {
-                // Create multiple particles for a trail effect
-                for (let i = 0; i < 10; i++) {  // More particles
-                    const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);  // Bigger particles
+                const particleSize = CONFIG.animations.flow.particleSize;
+                const particleCount = CONFIG.animations.flow.particleCount;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const geometry = new THREE.BoxGeometry(particleSize, particleSize, particleSize);
                     const material = new THREE.MeshPhongMaterial({
                         color: this.color,
                         transparent: true,
                         opacity: 0.8,
-                        emissive: this.color,  // Add glow effect
+                        emissive: this.color,
                         emissiveIntensity: 0.5
                     });
                     const particle = new THREE.Mesh(geometry, material);
@@ -771,43 +884,55 @@
                     scene.add(particle);
                     this.particles.push({
                         mesh: particle,
-                        offset: i * 0.1  // Tighter spacing
+                        offset: i * (1 / particleCount)  // Evenly spaced particles
                     });
                 }
             }
 
             startFlow(onComplete) {
-                this.active = true;
+                this.isRunning = true;
                 this.progress = 0;
-                this.particles.forEach(p => p.mesh.visible = true);
+                this.particles.forEach(p => {
+                    p.mesh.visible = true;
+                    this.startPulse(p.mesh, p.mesh.material.emissiveIntensity);
+                });
                 this.onComplete = onComplete;
             }
 
-            update() {
-                if (!this.active) return;
+            stop() {
+                this.isRunning = false;
+                this.particles.forEach(p => {
+                    p.mesh.visible = false;
+                });
+                this.stopPulseEffect();
+                if (this.onComplete) this.onComplete();
+            }
 
-                this.progress += 0.005; // Slower animation
+            update() {
+                if (!this.isRunning) return;
+
+                this.progress += CONFIG.animations.flow.speed;
 
                 this.particles.forEach(particle => {
                     let particleProgress = this.progress - particle.offset;
                     if (particleProgress < 0) particleProgress = 0;
                     if (particleProgress > 1) particleProgress = 1;
 
+                    // Add easing to particle movement
+                    const easedProgress = utils.easeInOutCubic(particleProgress);
                     particle.mesh.position.lerpVectors(
                         this.startPos,
                         this.endPos,
-                        particleProgress
+                        easedProgress
                     );
 
-                    // Fade particles at start and end
-                    const fade = 1 - Math.abs(particleProgress - 0.5) * 2;
+                    // Fade particles at start and end with easing
+                    const fade = 1 - Math.abs(easedProgress - 0.5) * 2;
                     particle.mesh.material.opacity = fade * 0.8;
                 });
 
                 if (this.progress >= 1.15) { // Account for trail length
-                    this.active = false;
-                    this.particles.forEach(p => p.mesh.visible = false);
-                    if (this.onComplete) this.onComplete();
+                    this.stop();
                 }
             }
 
@@ -945,15 +1070,66 @@
             }
         };
 
-        // Pipeline state
-        let pipelineState = {
-            canPush: true,
-            canCreatePR: false,
-            isProcessing: false,
-            canCommit: true,
-            hasLocalChanges: false,
-            currentAction: null
-        };
+        // Pipeline Flow Manager
+        class FlowManager {
+            constructor() {
+                this.state = {
+                    canPush: true,
+                    canCreatePR: false,
+                    isProcessing: false,
+                    canCommit: true,
+                    hasLocalChanges: false,
+                    currentAction: null
+                };
+            }
+
+            async executeStep({ 
+                status, 
+                component = null,
+                flow = null, 
+                action = null,
+                delayTime = CONFIG.animations.defaultDuration
+            }) {
+                showStatus(status);
+                
+                if (component) {
+                    clearAllHighlights();
+                    component.highlight();
+                    focusSystem.focusComponent(component);
+                }
+
+                if (flow) {
+                    flow.startFlow();
+                    await utils.delay(delayTime);
+                    flow.stop();
+                }
+
+                if (action) {
+                    await action();
+                }
+            }
+
+            async runPipeline(steps) {
+                this.state.isProcessing = true;
+                
+                try {
+                    for (const step of steps) {
+                        await this.executeStep(step);
+                    }
+                    return true;
+                } catch (error) {
+                    console.error('Pipeline error:', error);
+                    showStatus(`Pipeline failed: ${error.message}`);
+                    return false;
+                } finally {
+                    this.state.isProcessing = false;
+                }
+            }
+        }
+
+        // Initialize Flow Manager
+        const flowManager = new FlowManager();
+        const pipelineState = flowManager.state;
 
 
 
@@ -964,25 +1140,27 @@
                 return;
             }
 
-            pipelineState.isProcessing = true;
-            pipelineState.canCommit = false;
             pipelineState.currentAction = 'commit';
-
-            // Start the commit flow
-            showStatus('Developer committing changes...');
             updatePathColors(['devToLocal']);
-            components.developer.highlight();
 
-            // Simulate coding activity
-            flows.devToLocal.startFlow(async () => {
-                components.local.highlight();
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                showStatus('Changes committed to local repository');
-                pipelineState.hasLocalChanges = true;
-                pipelineState.isProcessing = false;
-                pipelineState.canCommit = true;
-                pipelineState.canPush = true;
-            });
+            const commitSteps = [
+                {
+                    status: 'Developer committing changes...',
+                    component: components.developer,
+                    flow: flows.devToLocal,
+                    delayTime: 1500
+                },
+                {
+                    status: 'Changes committed to local repository',
+                    component: components.local,
+                    action: () => {
+                        pipelineState.hasLocalChanges = true;
+                        pipelineState.canPush = true;
+                    }
+                }
+            ];
+
+            await flowManager.runPipeline(commitSteps);
         };
 
         // Handle commit button click
@@ -1035,139 +1213,125 @@
         let simulateFailure = false; // Control whether the pipeline should fail
 
         const handlePRCreation = async () => {
-            try {
-                pipelineState.isProcessing = true;
-                pipelineState.currentAction = 'pr';
-                pipelineState.canCreatePR = false;
-                
-                // Step 1: Create Pull Request
-                showStatus('Creating Pull Request...');
-                clearAllHighlights();
-                components.github.highlight();
-                
-                // Create PR visualization
-                if (activePR) {
-                    scene.remove(activePR.mesh);
-                    scene.remove(activePR.label);
+            pipelineState.currentAction = 'pr';
+            pipelineState.canCreatePR = false;
+            updatePathColors(['prToActions']);
+
+            // Reset all build steps
+            Object.values(buildSteps).forEach(step => step.reset());
+
+            // Create PR visualization
+            if (activePR) {
+                scene.remove(activePR.mesh);
+                scene.remove(activePR.label);
+            }
+            activePR = new Component(
+                createPullRequest,
+                new THREE.Vector3(-4, 0, 0),
+                'Pull Request',
+                0xFFEB3B
+            );
+
+            const prSteps = [
+                {
+                    status: 'Creating Pull Request...',
+                    component: components.github,
+                    action: () => activePR.highlight(),
+                    delayTime: 1000
+                },
+                {
+                    status: 'PR triggering GitHub Actions...',
+                    component: components.githubActions,
+                    flow: flows.prToActions,
+                    delayTime: 2000
+                },
+                {
+                    status: 'Starting CI Pipeline...',
+                    component: components.buildServer,
+                    flow: flows.actionsToBuild,
+                    delayTime: 1000
+                },
+                {
+                    status: 'Running linter...',
+                    action: async () => {
+                        await buildSteps.lint.run(!simulateFailure);
+                        if (!buildSteps.lint.isSuccess) throw new Error('Linting failed');
+                    },
+                    delayTime: 1000
+                },
+                {
+                    status: 'Running tests...',
+                    action: async () => {
+                        await buildSteps.test.run(!simulateFailure);
+                        if (!buildSteps.test.isSuccess) throw new Error('Tests failed');
+                    },
+                    delayTime: 1000
+                },
+                {
+                    status: 'Building project...',
+                    action: async () => {
+                        await buildSteps.build.run(!simulateFailure);
+                        if (!buildSteps.build.isSuccess) throw new Error('Build failed');
+                    },
+                    delayTime: 1000
+                },
+                {
+                    status: 'Deploying to test environment...',
+                    component: components.test,
+                    flow: flows.deployTest,
+                    delayTime: 2000
+                },
+                {
+                    status: 'Deploying to production...',
+                    component: components.prod,
+                    flow: flows.deployProd,
+                    delayTime: 2000
+                },
+                {
+                    status: 'Pipeline completed successfully!',
+                    action: () => {
+                        pipelineState.canCommit = true;
+                    },
+                    delayTime: 500
                 }
-                activePR = new Component(
-                    createPullRequest,
-                    new THREE.Vector3(-4, 0, 0),
-                    'Pull Request',
-                    0xFFEB3B
-                );
-                activePR.highlight();
-                await delay(1000);
+            ];
 
-                // Step 2: Trigger GitHub Actions
-                showStatus('PR triggering GitHub Actions...');
-                updatePathColors(['prToActions']);
-                flows.prToActions.startFlow();
-                clearAllHighlights();
-                components.githubActions.highlight();
-                focusSystem.focusComponent(components.githubActions);
-                await delay(2000);
-                flows.prToActions.stop();
-                
-                // Step 3: Run Build Steps
-                showStatus('Starting CI Pipeline...');
-                updatePathColors(['actionsToBuild']);
-                flows.actionsToBuild.startFlow();
-                clearAllHighlights();
-                components.buildServer.highlight();
-                focusSystem.focusComponent(components.buildServer);
-
-                // Reset all build steps
-                Object.values(buildSteps).forEach(step => step.reset());
-
-                // Run lint step
-                showStatus('Running linter...');
-                await buildSteps.lint.run(!simulateFailure);
-                if (!buildSteps.lint.isSuccess) throw new Error('Linting failed');
-                await delay(1000);
-
-                // Run test step
-                showStatus('Running tests...');
-                await buildSteps.test.run(!simulateFailure);
-                if (!buildSteps.test.isSuccess) throw new Error('Tests failed');
-                await delay(1000);
-
-                // Run build step
-                showStatus('Building project...');
-                await buildSteps.build.run(!simulateFailure);
-                if (!buildSteps.build.isSuccess) throw new Error('Build failed');
-                await delay(1000);
-
-                flows.actionsToBuild.stop();
-
-                // Step 4: Deploy to test
-                showStatus('Deploying to test environment...');
-                updatePathColors(['deployTest']);
-                flows.deployTest.startFlow();
-                clearAllHighlights();
-                components.test.highlight();
-                focusSystem.focusComponent(components.test);
-                await delay(2000);
-                flows.deployTest.stop();
-
-                // Step 5: Deploy to production
-                showStatus('Deploying to production...');
-                updatePathColors(['deployProd']);
-                flows.deployProd.startFlow();
-                clearAllHighlights();
-                components.prod.highlight();
-                focusSystem.focusComponent(components.prod);
-                await delay(2000);
-                flows.deployProd.stop();
-
-                showStatus('Pipeline completed successfully!');
-                pipelineState.canCommit = true;
-                pipelineState.isProcessing = false;
+            try {
+                await flowManager.runPipeline(prSteps);
             } catch (error) {
                 console.error('Error in PR creation:', error);
-                showStatus(`Pipeline failed: ${error.message}`);
                 flows.feedbackToDev.startFlow();
-                await delay(2000);
+                await utils.delay(2000);
                 flows.feedbackToDev.stop();
                 pipelineState.canCommit = true;
-                pipelineState.isProcessing = false;
             }
         };
 
         // Git push handler
         const handleGitPush = async () => {
-            pipelineState.isProcessing = true;
             pipelineState.currentAction = 'push';
-            showStatus('Pushing to GitHub...');
-            
-            try {
-                // Start particle flow animation and highlight source
-                components.local.highlight();
-                flows.gitPush.startFlow(() => {
-                    // When flow starts, highlight target
-                    components.github.highlight();
-                });
-                
-                // Simulate network delay
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Update state
-                pipelineState.canPush = false;
-                pipelineState.canCreatePR = true;
-                pipelineState.hasLocalChanges = false;
-                
-                // Show success feedback
-                showStatus('Successfully pushed to GitHub');
-                
-                // Update connection colors
-                updatePathColors(['gitPush']);
-                
-            } catch (error) {
-                console.error('Error in git push:', error);
-                showStatus('Error pushing to GitHub. Please try again.');
-            } finally {
-                pipelineState.isProcessing = false;
-            }
+            updatePathColors(['gitPush']);
+
+            const pushSteps = [
+                {
+                    status: 'Pushing to GitHub...',
+                    component: components.local,
+                    flow: flows.gitPush,
+                    delayTime: 1500
+                },
+                {
+                    status: 'Changes pushed to GitHub',
+                    component: components.github,
+                    delayTime: 1000,
+                    action: () => {
+                        pipelineState.canPush = false;
+                        pipelineState.canCreatePR = true;
+                        pipelineState.hasLocalChanges = false;
+                    }
+                }
+            ];
+
+            await flowManager.runPipeline(pushSteps);
         };
 
         // Animation loop
