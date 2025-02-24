@@ -385,28 +385,87 @@
             }
         }
 
-        // Local Git - Repository with branching structure
+        // Local Git - Node-based commit graph
         const createLocalGit = (color) => {
             const group = new THREE.Group();
             
-            // Main cylinder (trunk)
-            const trunk = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.5, 0.5, 3, 8),
-                createMetalMaterial(color)
-            );
-            group.add(trunk);
+            // Create commit nodes
+            const commitPoints = [
+                new THREE.Vector3(0, 1, 0),      // Main branch tip
+                new THREE.Vector3(0, 0, 0),      // Main branch middle
+                new THREE.Vector3(0, -1, 0),     // Main branch base
+                new THREE.Vector3(1, 0.5, 0),    // Feature branch tip
+                new THREE.Vector3(0.5, 0, 0),    // Feature branch base
+                new THREE.Vector3(-1, 0.5, 0),   // Hotfix branch tip
+                new THREE.Vector3(-0.5, 0, 0),   // Hotfix branch base
+            ];
 
-            // Branches
-            for (let i = 0; i < 3; i++) {
-                const branch = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.2, 0.2, 2, 8),
-                    createMetalMaterial(color)
+            // Create commit spheres
+            const commitGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const commits = commitPoints.map(point => {
+                const commit = new THREE.Mesh(
+                    commitGeometry,
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.2,
+                        transparent: true,
+                        opacity: 0.9
+                    })
                 );
-                branch.position.y = -0.5 + i;
-                branch.rotation.z = Math.PI / 3;
-                branch.position.x = 0.8;
-                group.add(branch);
-            }
+                commit.position.copy(point);
+                group.add(commit);
+                return commit;
+            });
+
+            // Create branch connections using tubes
+            const connections = [
+                [0, 1],  // Main branch top
+                [1, 2],  // Main branch bottom
+                [3, 4],  // Feature branch
+                [4, 1],  // Feature branch connection
+                [5, 6],  // Hotfix branch
+                [6, 1],  // Hotfix branch connection
+            ];
+
+            connections.forEach(([from, to]) => {
+                const curve = new THREE.CatmullRomCurve3([
+                    commitPoints[from],
+                    commitPoints[to]
+                ]);
+
+                const tubeGeometry = new THREE.TubeGeometry(
+                    curve,
+                    8,    // tubular segments
+                    0.05, // radius
+                    8,    // radial segments
+                    false // closed
+                );
+
+                const tube = new THREE.Mesh(
+                    tubeGeometry,
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.7
+                    })
+                );
+                group.add(tube);
+            });
+
+            // Add pulsing animation
+            let pulseTime = 0;
+            group.userData.update = () => {
+                pulseTime += 0.02;
+                commits.forEach((commit, index) => {
+                    const offset = index * 0.5;
+                    commit.material.emissiveIntensity = 
+                        0.2 + Math.sin(pulseTime + offset) * 0.15;
+                    commit.scale.setScalar(
+                        1.0 + Math.sin(pulseTime + offset) * 0.05
+                    );
+                });
+            };
 
             return group;
         };
@@ -550,58 +609,274 @@
             return group;
         };
 
-        // Create GitHub Actions component
+        // Create GitHub Actions component - Hexagonal Pipeline Processor
         const createGitHubActions = (color) => {
             const group = new THREE.Group();
 
-            // Central hexagon
-            const geometry = new THREE.CylinderGeometry(1.5, 1.5, 0.5, 6);
-            const material = createMetalMaterial(color);
-            const hexagon = new THREE.Mesh(geometry, material);
-            hexagon.rotation.x = Math.PI / 2;
-            group.add(hexagon);
+            // Central hexagonal platform
+            const platform = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.5, 1.5, 0.2, 6),
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.3,
+                    transparent: true,
+                    opacity: 0.9
+                })
+            );
+            platform.rotation.x = Math.PI / 2;
+            group.add(platform);
 
-            // Orbiting gears
+            // Progress bars for each stage
+            const stages = ['lint', 'test', 'build'];
+            const progressBars = stages.map((stage, index) => {
+                const bar = new THREE.Group();
+                
+                // Bar background
+                const background = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.8, 0.15, 0.1),
+                    new THREE.MeshPhongMaterial({
+                        color: 0x333333,
+                        transparent: true,
+                        opacity: 0.5
+                    })
+                );
+                
+                // Progress indicator
+                const progress = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.8, 0.15, 0.1),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.8
+                    })
+                );
+                progress.scale.x = 0;
+                progress.position.x = -0.4; // Start from left
+                
+                bar.add(background);
+                bar.add(progress);
+                
+                // Position the bar
+                const angle = (index / stages.length) * Math.PI * 2;
+                bar.position.set(
+                    Math.cos(angle) * 1.8,
+                    Math.sin(angle) * 1.8,
+                    0.2
+                );
+                bar.rotation.z = angle + Math.PI / 2;
+                
+                group.add(bar);
+                return { bar, progress };
+            });
+
+            // Add rotating gears
             const gearCount = 6;
+            const gears = [];
             for (let i = 0; i < gearCount; i++) {
-                const gearGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8);
-                const gear = new THREE.Mesh(gearGeometry, material);
-                const angle = (i / gearCount) * Math.PI * 2;
-                gear.position.x = Math.cos(angle) * 2;
-                gear.position.z = Math.sin(angle) * 2;
+                const gear = new THREE.Group();
+                
+                // Main gear body
+                const body = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.3, 0.3, 0.1, 8),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.3
+                    })
+                );
+                
+                // Gear teeth
+                const teethCount = 8;
+                for (let j = 0; j < teethCount; j++) {
+                    const tooth = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.1, 0.1, 0.1),
+                        body.material
+                    );
+                    const angle = (j / teethCount) * Math.PI * 2;
+                    tooth.position.set(
+                        Math.cos(angle) * 0.35,
+                        Math.sin(angle) * 0.35,
+                        0
+                    );
+                    gear.add(tooth);
+                }
+                
+                gear.add(body);
                 gear.rotation.x = Math.PI / 2;
+                
+                const angle = (i / gearCount) * Math.PI * 2;
+                gear.position.set(
+                    Math.cos(angle) * 2.5,
+                    Math.sin(angle) * 2.5,
+                    0
+                );
+                
                 group.add(gear);
+                gears.push(gear);
             }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Rotate gears
+                gears.forEach((gear, i) => {
+                    gear.rotation.z = time * (i % 2 === 0 ? 1 : -1);
+                });
+
+                // Pulse platform
+                platform.material.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.1;
+
+                // Animate progress bars
+                progressBars.forEach(({ progress }, i) => {
+                    const phase = (time + i * 0.5) % 3;
+                    if (phase < 1) {
+                        progress.scale.x = phase;
+                        progress.position.x = -0.4 + phase * 0.4;
+                    } else if (phase < 2) {
+                        progress.scale.x = 1;
+                        progress.position.x = 0;
+                    } else {
+                        progress.scale.x = 1 - (phase - 2);
+                        progress.position.x = (phase - 2) * 0.4 - 0.4;
+                    }
+                });
+            };
 
             return group;
         };
 
-        // Create Pull Request component
+        // Create Pull Request component - Merging Code Streams
         const createPullRequest = (color) => {
             const group = new THREE.Group();
 
-            // PR document shape
-            const document = new THREE.Mesh(
-                new THREE.BoxGeometry(1.5, 2, 0.2),
-                createMetalMaterial(color)
+            // Create merge portal (ring)
+            const portalRing = new THREE.Mesh(
+                new THREE.TorusGeometry(0.8, 0.1, 16, 32),
+                new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.5,
+                    transparent: true,
+                    opacity: 0.9
+                })
             );
-            group.add(document);
+            portalRing.rotation.x = Math.PI / 2;
+            group.add(portalRing);
 
-            // Add lines of "text"
-            const textMat = new THREE.MeshPhongMaterial({
-                color: 0xffffff,
-                emissive: 0xffffff,
-                emissiveIntensity: 0.5
-            });
+            // Create particle systems for code streams
+            const createStream = (startPos, endPos) => {
+                const particleCount = 30;
+                const positions = new Float32Array(particleCount * 3);
+                const velocities = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] = startPos.x + (Math.random() - 0.5) * 0.2;
+                    positions[i * 3 + 1] = startPos.y + (Math.random() - 0.5) * 0.2;
+                    positions[i * 3 + 2] = startPos.z + (Math.random() - 0.5) * 0.2;
+                    
+                    const direction = endPos.clone().sub(startPos).normalize();
+                    velocities[i * 3] = direction.x * 0.05;
+                    velocities[i * 3 + 1] = direction.y * 0.05;
+                    velocities[i * 3 + 2] = direction.z * 0.05;
+                }
 
-            for (let i = 0; i < 3; i++) {
-                const line = new THREE.Mesh(
-                    new THREE.BoxGeometry(1, 0.1, 0.1),
-                    textMat
+                const particles = new THREE.Points(
+                    new THREE.BufferGeometry(),
+                    new THREE.PointsMaterial({
+                        color: color,
+                        size: 0.05,
+                        transparent: true,
+                        opacity: 0.6,
+                        blending: THREE.AdditiveBlending
+                    })
                 );
-                line.position.y = 0.5 - (i * 0.4);
-                group.add(line);
+                
+                particles.geometry.setAttribute('position', 
+                    new THREE.Float32BufferAttribute(positions, 3));
+                particles.userData.velocities = velocities;
+                particles.userData.startPos = startPos;
+                particles.userData.endPos = endPos;
+                
+                return particles;
+            };
+
+            // Create two merging streams
+            const stream1 = createStream(
+                new THREE.Vector3(-1.5, 1, 0),  // Start top-left
+                new THREE.Vector3(0, 0, 0)      // Merge center
+            );
+            const stream2 = createStream(
+                new THREE.Vector3(1.5, 1, 0),   // Start top-right
+                new THREE.Vector3(0, 0, 0)      // Merge center
+            );
+            
+            group.add(stream1);
+            group.add(stream2);
+
+            // Add diff visualization planes
+            const diffPlanes = [];
+            for (let i = 0; i < 3; i++) {
+                const plane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(1.2, 0.2),
+                    new THREE.MeshPhongMaterial({
+                        color: i % 2 === 0 ? 0x4CAF50 : 0xFF5252,
+                        transparent: true,
+                        opacity: 0.5,
+                        side: THREE.DoubleSide
+                    })
+                );
+                plane.position.set(0, -0.8 - i * 0.3, 0);
+                plane.rotation.x = Math.PI / 6;
+                group.add(plane);
+                diffPlanes.push(plane);
             }
+
+            // Add animation update function
+            let time = 0;
+            group.userData.update = () => {
+                time += 0.02;
+
+                // Animate portal ring
+                portalRing.rotation.z = time;
+                portalRing.material.emissiveIntensity = 0.5 + Math.sin(time * 2) * 0.2;
+
+                // Animate particle streams
+                [stream1, stream2].forEach(stream => {
+                    const positions = stream.geometry.attributes.position.array;
+                    const velocities = stream.userData.velocities;
+                    
+                    for (let i = 0; i < positions.length / 3; i++) {
+                        positions[i * 3] += velocities[i * 3];
+                        positions[i * 3 + 1] += velocities[i * 3 + 1];
+                        positions[i * 3 + 2] += velocities[i * 3 + 2];
+                        
+                        // Reset particle if it reaches the center
+                        const dist = Math.sqrt(
+                            positions[i * 3] * positions[i * 3] +
+                            positions[i * 3 + 1] * positions[i * 3 + 1]
+                        );
+                        
+                        if (dist < 0.2) {
+                            const startPos = stream.userData.startPos;
+                            positions[i * 3] = startPos.x + (Math.random() - 0.5) * 0.2;
+                            positions[i * 3 + 1] = startPos.y + (Math.random() - 0.5) * 0.2;
+                            positions[i * 3 + 2] = startPos.z + (Math.random() - 0.5) * 0.2;
+                        }
+                    }
+                    
+                    stream.geometry.attributes.position.needsUpdate = true;
+                });
+
+                // Animate diff planes
+                diffPlanes.forEach((plane, i) => {
+                    plane.material.opacity = 0.5 + Math.sin(time * 2 + i) * 0.2;
+                });
+            };
 
             return group;
         };
@@ -614,36 +889,112 @@
             return label;
         };
 
-        // Create developer component
+        // Create developer component - Code Terminal Matrix
         const createDeveloper = (color) => {
             const group = new THREE.Group();
 
-            // Developer head
-            const head = new THREE.Mesh(
-                new THREE.SphereGeometry(0.8, 32, 32),
+            // Terminal screen
+            const screen = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 2, 0.1),
+                new THREE.MeshPhongMaterial({
+                    color: 0x111111,
+                    emissive: color,
+                    emissiveIntensity: 0.5,
+                    transparent: true,
+                    opacity: 0.9
+                })
+            );
+            group.add(screen);
+
+            // Add flowing code text planes
+            const textPlaneCount = 5;
+            for (let i = 0; i < textPlaneCount; i++) {
+                const plane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(2.8, 0.3),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.3,
+                        side: THREE.DoubleSide
+                    })
+                );
+                plane.position.z = 0.1;
+                plane.position.y = 0.8 - (i * 0.4);
+                group.add(plane);
+
+                // Add animation data
+                plane.userData.speed = 0.02 + Math.random() * 0.02;
+                plane.userData.offset = Math.random() * Math.PI * 2;
+            }
+
+            // Keyboard base
+            const keyboard = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.2, 1),
                 createMetalMaterial(color)
             );
-            head.position.y = 1.2;
-            group.add(head);
+            keyboard.position.y = -1.5;
+            keyboard.position.z = 0.5;
+            group.add(keyboard);
 
-            // Developer body
-            const body = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.5, 0.8, 2, 8),
-                createMetalMaterial(color)
+            // Add particle emitter for keystrokes
+            const particleSystem = new THREE.Points(
+                new THREE.BufferGeometry(),
+                new THREE.PointsMaterial({
+                    color: color,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                })
             );
-            group.add(body);
+            
+            // Initialize particles
+            const particleCount = 20;
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 2.8;  // x
+                positions[i * 3 + 1] = -1.4;  // y (just above keyboard)
+                positions[i * 3 + 2] = 0.5;   // z
+                
+                velocities[i * 3] = (Math.random() - 0.5) * 0.02;  // x velocity
+                velocities[i * 3 + 1] = Math.random() * 0.05;      // y velocity
+                velocities[i * 3 + 2] = 0;                         // z velocity
+            }
+            
+            particleSystem.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            particleSystem.userData.velocities = velocities;
+            group.add(particleSystem);
 
-            // Developer arms
-            const armGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
-            const leftArm = new THREE.Mesh(armGeometry, createMetalMaterial(color));
-            leftArm.position.set(-0.8, 0.2, 0);
-            leftArm.rotation.z = Math.PI / 4;
-            group.add(leftArm);
+            // Add update function for animations
+            group.userData.update = () => {
+                // Animate code planes
+                group.children.forEach(child => {
+                    if (child.geometry instanceof THREE.PlaneGeometry) {
+                        child.material.opacity = 0.3 + Math.sin(Date.now() * child.userData.speed + child.userData.offset) * 0.2;
+                    }
+                });
 
-            const rightArm = new THREE.Mesh(armGeometry, createMetalMaterial(color));
-            rightArm.position.set(0.8, 0.2, 0);
-            rightArm.rotation.z = -Math.PI / 4;
-            group.add(rightArm);
+                // Animate particles
+                const positions = particleSystem.geometry.attributes.position.array;
+                const velocities = particleSystem.userData.velocities;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] += velocities[i * 3];     // Update x
+                    positions[i * 3 + 1] += velocities[i * 3 + 1]; // Update y
+                    
+                    // Reset particle if it goes too high
+                    if (positions[i * 3 + 1] > -0.5) {
+                        positions[i * 3] = (Math.random() - 0.5) * 2.8;
+                        positions[i * 3 + 1] = -1.4;
+                        velocities[i * 3] = (Math.random() - 0.5) * 0.02;
+                        velocities[i * 3 + 1] = Math.random() * 0.05;
+                    }
+                }
+                
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+            };
 
             return group;
         };
@@ -1452,6 +1803,13 @@
             requestAnimationFrame(animate);
             controls.update();
             TWEEN.update();
+
+            // Update component animations
+            Object.values(components).forEach(component => {
+                if (component.mesh && component.mesh.userData.update) {
+                    component.mesh.userData.update();
+                }
+            });
 
             // Update flows
             Object.values(flows).forEach(flow => {
