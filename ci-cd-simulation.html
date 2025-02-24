@@ -600,8 +600,8 @@
         // Particle system for code flow
         class ParticleFlow {
             constructor(start, end, color = 0x00ff00) {
-                this.startPos = start;
-                this.endPos = end;
+                this.startPos = typeof start === 'object' && start.mesh ? start.mesh.position : start;
+                this.endPos = typeof end === 'object' && end.mesh ? end.mesh.position : end;
                 this.color = color;
                 this.particles = [];
                 this.progress = 0;
@@ -665,6 +665,12 @@
                     if (this.onComplete) this.onComplete();
                 }
             }
+
+            // Maintain compatibility with old API
+            stop() {
+                this.active = false;
+                this.particles.forEach(p => p.mesh.visible = false);
+            }
         }
 
         // GitHub Actions visualization
@@ -718,7 +724,7 @@
             devToLocal: new ParticleFlow(components.developer.mesh.position, components.local.mesh.position, 0x4CAF50),
             gitPush: new ParticleFlow(components.local.mesh.position, components.github.mesh.position, 0x4CAF50),
             prToActions: new ParticleFlow(new THREE.Vector3(-4, 0, 0), new THREE.Vector3(-8, 6, 0), 0xFFC107),  // PR to GitHub Actions
-            actionsToBuilder: new ParticleFlow(new THREE.Vector3(-8, 6, 0), new THREE.Vector3(-8, -8, 0), 0xFF9800),  // GitHub Actions to Build Server
+            actionsToBuild: new ParticleFlow(new THREE.Vector3(-8, 6, 0), new THREE.Vector3(-8, -8, 0), 0xFF9800),  // GitHub Actions to Build Server
             deployTest: new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position, 0x9C27B0),
             deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336),
             feedbackToDev: new ParticleFlow(components.buildServer.mesh.position, components.developer.mesh.position, 0xFF0000)  // Red for failure feedback
