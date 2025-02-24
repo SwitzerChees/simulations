@@ -1763,6 +1763,7 @@
                 // Store components and initialize state
                 this.targetComponent = targetComponent;
                 this.startComponent = startComponent;
+                this.hasHighlightedTarget = false;
                 this.onComplete = onComplete;
                 
                 // Start the flow immediately
@@ -1785,12 +1786,6 @@
                 });
                 this.stopPulseEffect();
                 
-                // Just highlight the target component, camera is already focused
-                if (this.targetComponent) {
-                    clearAllHighlights();
-                    this.targetComponent.highlight();
-                }
-                
                 if (this.onComplete) this.onComplete();
                 this.isRunning = false;
             }
@@ -1802,8 +1797,17 @@
                 const duration = CONFIG.animations.flow.duration;
                 this.progress = Math.min(elapsed / duration, 1);
 
-                // At 50%, clear start highlight and highlight target
-                if (this.progress >= 0.5 && this.targetComponent) {
+
+                // At 20%, highlight target component as particles start moving
+                if (this.progress >= 0.2 && this.targetComponent && !this.hasHighlightedTarget) {
+                    clearAllHighlights();
+                    console.log('highlighting target', this.targetComponent.name);
+                    this.targetComponent.highlight();
+                    this.hasHighlightedTarget = true;
+                }
+
+                // Make sure target stays highlighted at the end
+                if (this.progress >= 0.95 && this.targetComponent) {
                     clearAllHighlights();
                     this.targetComponent.highlight();
                 }
@@ -2010,7 +2014,8 @@
             async executeStep({ 
                 status, 
                 flow = null, 
-                action = null
+                action = null,
+                targetComponent = null
             }) {
                 showStatus(status);
                 
@@ -2018,7 +2023,7 @@
                     return new Promise(async (resolve) => {
                         flow.startFlow(() => {
                             resolve();
-                        });
+                        }, targetComponent);
                     });
                 }
 
@@ -2065,6 +2070,7 @@
                 {
                     status: 'Developer committing changes...',
                     flow: flows.devToLocal,
+                    targetComponent: components.local,
                     delayTime: 1500
                 },
                 {
@@ -2154,11 +2160,13 @@
                 {
                     status: 'PR triggering GitHub Actions...',
                     flow: flows.prToActions,
+                    targetComponent: components.githubActions,
                     delayTime: 2000
                 },
                 {
                     status: 'Starting CI Pipeline...',
                     flow: flows.actionsToBuild,
+                    targetComponent: components.buildServer,
                     delayTime: 1000
                 },
                 {
@@ -2188,11 +2196,13 @@
                 {
                     status: 'Deploying to test environment...',
                     flow: flows.deployTest,
+                    targetComponent: components.test,
                     delayTime: 2000
                 },
                 {
                     status: 'Deploying to production...',
                     flow: flows.deployProd,
+                    targetComponent: components.prod,
                     delayTime: 2000
                 },
                 {
@@ -2224,6 +2234,7 @@
                 {
                     status: 'Pushing to GitHub...',
                     flow: flows.gitPush,
+                    targetComponent: components.github,
                     delayTime: 1500
                 },
                 {
