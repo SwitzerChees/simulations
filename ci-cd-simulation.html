@@ -45,6 +45,9 @@
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
+        // Helper functions
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
         // Status and history management
         const showStatus = (message) => {
             const statusEl = document.getElementById('status');
@@ -540,11 +543,116 @@
             )
         };
 
-        // Create build status indicators
-        const buildStatuses = {
-            lint: createBuildStatus('Linting...', new THREE.Vector3(-10, -6, 0), 0xFFEB3B),
-            test: createBuildStatus('Testing...', new THREE.Vector3(-8, -6, 0), 0x4CAF50),
-            build: createBuildStatus('Building...', new THREE.Vector3(-6, -6, 0), 0x2196F3)
+        // Build Step visualization
+        class BuildStep {
+            constructor(name, position, color) {
+                this.name = name;
+                this.position = position;
+                this.color = color;
+                this.progress = 0;
+                this.isRunning = false;
+                this.isComplete = false;
+                this.isSuccess = false;
+
+                // Create the step visualization
+                const geometry = new THREE.BoxGeometry(2, 0.5, 0.5);
+                const material = new THREE.MeshPhongMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0.5,
+                    emissive: this.color,
+                    emissiveIntensity: 0.2
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(position);
+                scene.add(this.mesh);
+
+                // Create progress indicator (starts invisible)
+                const progressGeometry = new THREE.BoxGeometry(0.1, 0.7, 0.7);
+                const progressMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.5
+                });
+                this.progressMesh = new THREE.Mesh(progressGeometry, progressMaterial);
+                this.progressMesh.position.copy(position);
+                this.progressMesh.position.x -= 1; // Start from the left
+                this.progressMesh.visible = false;
+                scene.add(this.progressMesh);
+
+                // Create label
+                this.label = createTextSprite(name, new THREE.Vector3(position.x, position.y + 0.5, position.z));
+                scene.add(this.label);
+            }
+
+            async run(shouldSucceed = true) {
+                this.isRunning = true;
+                this.progress = 0;
+                this.progressMesh.visible = true;
+                this.mesh.material.opacity = 0.8;
+
+                // Animate progress
+                return new Promise((resolve) => {
+                    const animate = () => {
+                        if (this.progress < 1) {
+                            this.progress += 0.02;
+                            this.progressMesh.position.x = this.position.x - 1 + (this.progress * 2);
+                            if (this.progress < 1) {
+                                requestAnimationFrame(animate);
+                            } else {
+                                this.complete(shouldSucceed);
+                                resolve();
+                            }
+                        }
+                    };
+                    animate();
+                });
+            }
+
+            complete(success) {
+                this.isComplete = true;
+                this.isSuccess = success;
+                this.isRunning = false;
+                this.progressMesh.visible = false;
+
+                // Update appearance based on result
+                if (success) {
+                    this.mesh.material.color.setHex(0x4CAF50);  // Green
+                    this.mesh.material.emissive.setHex(0x4CAF50);
+                    this.label.material.map.dispose();
+                    this.label = createTextSprite(`${this.name} ✓`, 
+                        new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
+                } else {
+                    this.mesh.material.color.setHex(0xFF5252);  // Red
+                    this.mesh.material.emissive.setHex(0xFF5252);
+                    this.label.material.map.dispose();
+                    this.label = createTextSprite(`${this.name} ✗`, 
+                        new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
+                }
+            }
+
+            reset() {
+                this.progress = 0;
+                this.isRunning = false;
+                this.isComplete = false;
+                this.isSuccess = false;
+                this.progressMesh.visible = false;
+                this.mesh.material.color.setHex(this.color);
+                this.mesh.material.emissive.setHex(this.color);
+                this.mesh.material.opacity = 0.5;
+                this.label.material.map.dispose();
+                this.label = createTextSprite(this.name, 
+                    new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z));
+            }
+        }
+
+        // Create build steps
+        const buildSteps = {
+            lint: new BuildStep('Linting', new THREE.Vector3(-10, -6, 0), 0xFFEB3B),
+            test: new BuildStep('Testing', new THREE.Vector3(-8, -6, 0), 0x4CAF50),
+            build: new BuildStep('Building', new THREE.Vector3(-6, -6, 0), 0x2196F3)
         };
 
         let activePR = null;
@@ -887,6 +995,8 @@
         };
 
         // PR Creation Handler
+        let simulateFailure = false; // Control whether the pipeline should fail
+
         const handlePRCreation = async () => {
             try {
                 pipelineState.isProcessing = true;
@@ -910,51 +1020,80 @@
                     0xFFEB3B
                 );
                 activePR.highlight();
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await delay(1000);
 
                 // Step 2: Trigger GitHub Actions
                 showStatus('PR triggering GitHub Actions...');
                 updatePathColors(['prToActions']);
-                flows.prToActions.startFlow(async () => {
-                    clearAllHighlights();
-                    components.githubActions.highlight();
-                    focusSystem.focusComponent(components.githubActions);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    // Step 3: Run Build Steps
-                    showStatus('Starting CI Pipeline...');
-                    updatePathColors(['actionsToBuild']);
-                    flows.actionsToBuild.startFlow(async () => {
-                        clearAllHighlights();
-                        components.buildServer.highlight();
-                        focusSystem.focusComponent(components.buildServer);
-                        
-                        try {
-                            await runBuildStep(buildStatuses.lint, 'GitHub Actions: Running linter...', 2000);
-                            await runBuildStep(buildStatuses.test, 'GitHub Actions: Running tests...', 2000);
-                            await runBuildStep(buildStatuses.build, 'GitHub Actions: Building...', 2000);
-                            
-                            // Show success
-                            showStatus('CI pipeline passed! PR ready for review.');
-                            pipelineState.isProcessing = false;
-                        } catch (error) {
-                            // Show failure feedback
-                            showStatus(`CI Failed: ${error.message}`);
-                            clearAllHighlights();
-                            components.developer.highlight();
-                            focusSystem.focusComponent(components.developer);
-                            updatePathColors(['prToActions', 'actionsToBuild', 'feedbackToDev']);
-                            pipelineState.isProcessing = false;
-                        }
-                    });
-                });
+                flows.prToActions.startFlow();
+                clearAllHighlights();
+                components.githubActions.highlight();
+                focusSystem.focusComponent(components.githubActions);
+                await delay(2000);
+                flows.prToActions.stop();
+                
+                // Step 3: Run Build Steps
+                showStatus('Starting CI Pipeline...');
+                updatePathColors(['actionsToBuild']);
+                flows.actionsToBuild.startFlow();
+                clearAllHighlights();
+                components.buildServer.highlight();
+                focusSystem.focusComponent(components.buildServer);
+
+                // Reset all build steps
+                Object.values(buildSteps).forEach(step => step.reset());
+
+                // Run lint step
+                showStatus('Running linter...');
+                await buildSteps.lint.run(!simulateFailure);
+                if (!buildSteps.lint.isSuccess) throw new Error('Linting failed');
+                await delay(500);
+
+                // Run test step
+                showStatus('Running tests...');
+                await buildSteps.test.run(!simulateFailure);
+                if (!buildSteps.test.isSuccess) throw new Error('Tests failed');
+                await delay(500);
+
+                // Run build step
+                showStatus('Building project...');
+                await buildSteps.build.run(!simulateFailure);
+                if (!buildSteps.build.isSuccess) throw new Error('Build failed');
+                await delay(500);
+
+                flows.actionsToBuild.stop();
+
+                // Step 4: Deploy to test
+                showStatus('Deploying to test environment...');
+                updatePathColors(['deployTest']);
+                flows.deployTest.startFlow();
+                clearAllHighlights();
+                components.test.highlight();
+                focusSystem.focusComponent(components.test);
+                await delay(2000);
+                flows.deployTest.stop();
+
+                // Step 5: Deploy to production
+                showStatus('Deploying to production...');
+                updatePathColors(['deployProd']);
+                flows.deployProd.startFlow();
+                clearAllHighlights();
+                components.prod.highlight();
+                focusSystem.focusComponent(components.prod);
+                await delay(2000);
+                flows.deployProd.stop();
+
+                showStatus('Pipeline completed successfully!');
+                pipelineState.canCommit = true;
+                pipelineState.isProcessing = false;
             } catch (error) {
                 console.error('Error in PR creation:', error);
-                showStatus('Error creating PR');
-                clearAllHighlights();
-                components.github.highlight();
+                showStatus(`Pipeline failed: ${error.message}`);
+                flows.feedbackToDev.startFlow();
+                await delay(2000);
+                flows.feedbackToDev.stop();
+                pipelineState.canCommit = true;
                 pipelineState.isProcessing = false;
-                pipelineState.canCreatePR = true;
             }
         };
 
