@@ -961,9 +961,10 @@
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let hoveredComponent = null;
+        let mouseDownComponent = null;
 
-        // Mouse move handler for hover effect
-        window.addEventListener('mousemove', (event) => {
+        // Helper function to find component at mouse position
+        const findComponentAtMouse = (event) => {
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -976,7 +977,6 @@
             });
             const intersects = raycaster.intersectObjects(allMeshes);
 
-            let foundComponent = null;
             if (intersects.length > 0) {
                 const object = intersects[0].object;
                 let current = object;
@@ -984,9 +984,15 @@
                     current = current.parent;
                 }
                 if (current && current.userData.rootComponent) {
-                    foundComponent = current.userData.rootComponent;
+                    return current.userData.rootComponent;
                 }
             }
+            return null;
+        };
+
+        // Mouse move handler for hover effect
+        window.addEventListener('mousemove', (event) => {
+            const foundComponent = findComponentAtMouse(event);
 
             // Update hover highlighting
             if (foundComponent !== hoveredComponent) {
@@ -1010,36 +1016,23 @@
             }
         });
 
-        window.addEventListener('click', async (event) => { 
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        // Mouse down handler
+        window.addEventListener('mousedown', (event) => {
+            mouseDownComponent = findComponentAtMouse(event);
+        });
 
-            raycaster.setFromCamera(mouse, camera);
-            // Get all meshes in the scene for intersection testing
-            const allMeshes = [];
-            scene.traverse((object) => {
-                if (object.isMesh) {
-                    allMeshes.push(object);
-                }
-            });
-            const intersects = raycaster.intersectObjects(allMeshes);
-
-            if (intersects.length > 0 && !pipelineState.isProcessing) {
-                const object = intersects[0].object;
-                // Find the root component by traversing up the parent chain
-                let current = object;
-                while (current && !current.userData.component) {
-                    current = current.parent;
-                }
-                
-                if (current && current.userData.rootComponent) {
-                    const component = current.userData.rootComponent;
-                    component.highlight();
-                    focusSystem.focusComponent(component);
-                }
+        // Mouse up handler
+        window.addEventListener('mouseup', async (event) => {
+            const mouseUpComponent = findComponentAtMouse(event);
+            
+            // Only trigger if mouseup is on the same component as mousedown
+            if (mouseUpComponent && mouseUpComponent === mouseDownComponent && !pipelineState.isProcessing) {
+                mouseUpComponent.highlight();
+                focusSystem.focusComponent(mouseUpComponent);
+                animate();
             }
-
-            animate();
+            
+            mouseDownComponent = null;
         });
 
         animate();
