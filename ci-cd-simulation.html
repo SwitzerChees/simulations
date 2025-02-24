@@ -922,16 +922,50 @@
                 }
             }
 
-            startFlow(onComplete) {
-                this.cleanup(); // Clean up any existing particles
-                this.createParticles(); // Create fresh particles
+            async startFlow(onComplete, targetComponent) {
+                // Clean up and setup
+                this.cleanup();
+                this.createParticles();
+                
+                // Get start component based on the flow path
+                let startComponent;
+                Object.entries(pathConnections).forEach(([path, connection]) => {
+                    if (connection.geometry.attributes.position.array[3] === this.endPos.x &&
+                        connection.geometry.attributes.position.array[4] === this.endPos.y &&
+                        connection.geometry.attributes.position.array[5] === this.endPos.z) {
+                        Object.values(components).forEach(comp => {
+                            if (comp.mesh.position.equals(new THREE.Vector3(
+                                connection.geometry.attributes.position.array[0],
+                                connection.geometry.attributes.position.array[1],
+                                connection.geometry.attributes.position.array[2]
+                            ))) {
+                                startComponent = comp;
+                            }
+                        });
+                    }
+                });
+                
+                // Move camera to start shape and clear any highlights
+                clearAllHighlights();
+                focusSystem.focusComponent(startComponent);
+                await utils.delay(1500); // Give more time for camera movement
+                
+                // Start the flow
                 this.isRunning = true;
                 this.progress = 0;
                 this.startTime = Date.now();
                 this.particles.forEach(p => {
                     p.mesh.visible = true;
                 });
+                
+                // Store components for later
+                this.targetComponent = targetComponent;
+                this.startComponent = startComponent;
                 this.onComplete = onComplete;
+                
+                // Reset state flags
+                this.hasCameraMoving = false;
+                this.hasHighlightedTarget = false;
             }
 
             stop() {
@@ -949,6 +983,19 @@
                 const elapsed = Date.now() - this.startTime;
                 const duration = CONFIG.animations.flow.duration;
                 this.progress = Math.min(elapsed / duration, 1);
+
+                // At 60%, just start moving camera to target (no highlight)
+                if (this.progress >= 0.6 && this.targetComponent && !this.hasCameraMoving) {
+                    this.hasCameraMoving = true;
+                    clearAllHighlights(); // Clear any lingering highlights
+                    focusSystem.focusComponent(this.targetComponent);
+                }
+
+                // At 90%, highlight the target
+                if (this.progress >= 0.9 && this.targetComponent && !this.hasHighlightedTarget) {
+                    this.hasHighlightedTarget = true;
+                    this.targetComponent.highlight();
+                }
 
                 this.particles.forEach(particle => {
                     let particleProgress = this.progress - particle.offset;
@@ -1157,21 +1204,14 @@
             }) {
                 showStatus(status);
                 
-                // Always clear previous highlights first
-                clearAllHighlights();
-                
                 if (flow && component) {
-                    // Create a single promise for both flow and highlight
-                    return new Promise((resolve) => {
-                        // Start highlight and flow together
-                        component.highlight();
-                        focusSystem.focusComponent(component);
-                        
+                    return new Promise(async (resolve) => {
                         flow.startFlow(() => {
                             resolve();
-                        });
+                        }, component);
                     });
                 } else if (component) {
+                    clearAllHighlights();
                     component.highlight();
                     focusSystem.focusComponent(component);
                     await utils.delay(CONFIG.animations.flow.duration);
