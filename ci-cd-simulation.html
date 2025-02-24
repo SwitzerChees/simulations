@@ -244,8 +244,20 @@
                 };
             }
 
-            focusComponent(component) {
+            async focusComponent(component) {
                 if (!component || !component.mesh) return;
+                
+                // Wait for any existing transition to complete
+                if (this.isTransitioning) {
+                    await new Promise(resolve => {
+                        const checkTransition = () => {
+                            if (!this.isTransitioning) resolve();
+                            else setTimeout(checkTransition, 10);
+                        };
+                        checkTransition();
+                    });
+                }
+                
                 this.currentComponent = component;
                 
                 // Calculate ideal camera position based on component size
@@ -269,6 +281,15 @@
                 
                 this.isTransitioning = true;
                 this.startTime = Date.now();
+                
+                // Return a promise that resolves when the transition is complete
+                return new Promise(resolve => {
+                    const checkCompletion = () => {
+                        if (!this.isTransitioning) resolve();
+                        else setTimeout(checkCompletion, 10);
+                    };
+                    checkCompletion();
+                });
             }
 
             update() {
@@ -307,10 +328,7 @@
         const focusSequence = {
             start: function(fromComponent, toComponent) {
                 if (!fromComponent || !toComponent) return;
-                focusSystem.focusComponent(fromComponent);
-                setTimeout(() => {
-                    focusSystem.focusComponent(toComponent);
-                }, 1500);
+                focusSystem.focusComponent(toComponent);
             }
         };
 
@@ -1740,12 +1758,22 @@
                     }
                 });
                 
-                // Move camera to start shape and clear any highlights
+                // Clear any existing highlights
                 clearAllHighlights();
-                focusSystem.focusComponent(startComponent);
-                await utils.delay(1500); // Give more time for camera movement
                 
-                // Start the flow
+                // Store components for later
+                this.targetComponent = targetComponent;
+                this.startComponent = startComponent;
+                this.hasCameraMoving = false;
+                this.hasHighlightedTarget = false;
+                
+                // Start with focus on start component if available
+                if (startComponent) {
+                    startComponent.highlight();
+                    await cameraTracker.focusComponent(startComponent);
+                }
+                
+                // Start the flow after camera is in position
                 this.isRunning = true;
                 this.progress = 0;
                 this.startTime = Date.now();
@@ -1768,6 +1796,14 @@
                     p.mesh.visible = false;
                 });
                 this.stopPulseEffect();
+                
+                // Ensure we stay focused on target component
+                if (this.targetComponent) {
+                    clearAllHighlights();
+                    this.targetComponent.highlight();
+                    cameraTracker.focusComponent(this.targetComponent);
+                }
+                
                 if (this.onComplete) this.onComplete();
                 this.isRunning = false;
             }
@@ -1779,15 +1815,16 @@
                 const duration = CONFIG.animations.flow.duration;
                 this.progress = Math.min(elapsed / duration, 1);
 
-                // At 60%, just start moving camera to target (no highlight)
-                if (this.progress >= 0.6 && this.targetComponent && !this.hasCameraMoving) {
+                // At 30%, start moving camera to target (no highlight)
+                if (this.progress >= 0.3 && this.targetComponent && !this.hasCameraMoving) {
                     this.hasCameraMoving = true;
                     clearAllHighlights(); // Clear any lingering highlights
-                    focusSystem.focusComponent(this.targetComponent);
+                    // Don't await here since we want the animation to continue
+                    cameraTracker.focusComponent(this.targetComponent);
                 }
 
-                // At 90%, highlight the target
-                if (this.progress >= 0.9 && this.targetComponent && !this.hasHighlightedTarget) {
+                // At 50%, highlight the target
+                if (this.progress >= 0.5 && this.targetComponent && !this.hasHighlightedTarget) {
                     this.hasHighlightedTarget = true;
                     this.targetComponent.highlight();
                 }
@@ -2008,7 +2045,7 @@
                 } else if (component) {
                     clearAllHighlights();
                     component.highlight();
-                    focusSystem.focusComponent(component);
+                    cameraTracker.focusComponent(component);
                     await utils.delay(CONFIG.animations.flow.duration);
                 }
 
@@ -2074,16 +2111,22 @@
         // Handle commit button click
         document.getElementById('commitButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing) {
-                handleCommit();
-                focusSequence.start(components.developer, components.local);
+                focusSystem.focusComponent(components.developer);
+                setTimeout(() => handleCommit(), 1000);
+                setTimeout(() => {
+                    focusSystem.focusComponent(components.local);
+                }, 2500);
             }
         });
 
         // Handle push button click
         document.getElementById('pushButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canPush && pipelineState.hasLocalChanges) {
-                handleGitPush();
-                focusSequence.start(components.local, components.github);
+                focusSystem.focusComponent(components.local);
+                setTimeout(() => handleGitPush(), 1000);
+                setTimeout(() => {
+                    focusSystem.focusComponent(components.github);
+                }, 2500);
             } else {
                 showStatus('Cannot push: Ensure you have committed changes and no process is running');
             }
@@ -2092,8 +2135,11 @@
         // Handle PR button click
         document.getElementById('createPRButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canCreatePR) {
-                handlePRCreation();
-                focusSequence.start(components.github, components.githubActions);
+                focusSystem.focusComponent(components.github);
+                setTimeout(() => handlePRCreation(), 1000);
+                setTimeout(() => {
+                    focusSystem.focusComponent(components.githubActions);
+                }, 2500);
             } else {
                 showStatus('Cannot create PR: Ensure you have pushed changes and no process is running');
             }
