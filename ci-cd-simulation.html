@@ -318,17 +318,19 @@
         
         // Component focus system
         const focusSystem = {
-            focusComponent: function(component) {
+            async focusComponent(component) {
                 if (!component || !component.mesh) return;
-                cameraTracker.focusComponent(component);
+                return cameraTracker.focusComponent(component);
             }
         };
 
         // Add sequence focus capability
         const focusSequence = {
-            start: function(fromComponent, toComponent) {
+            async start(fromComponent, toComponent) {
                 if (!fromComponent || !toComponent) return;
-                focusSystem.focusComponent(toComponent);
+                // Let the particle flow handle the camera transitions
+                // Don't focus here as it may conflict with the flow animation
+                return;
             }
         };
 
@@ -1743,15 +1745,12 @@
                 // Get start component based on the flow path
                 let startComponent;
                 Object.entries(pathConnections).forEach(([path, connection]) => {
-                    if (connection.geometry.attributes.position.array[3] === this.endPos.x &&
-                        connection.geometry.attributes.position.array[4] === this.endPos.y &&
-                        connection.geometry.attributes.position.array[5] === this.endPos.z) {
+                    // Check if this connection starts at our start position
+                    if (connection.geometry.attributes.position.array[0] === this.startPos.x &&
+                        connection.geometry.attributes.position.array[1] === this.startPos.y &&
+                        connection.geometry.attributes.position.array[2] === this.startPos.z) {
                         Object.values(components).forEach(comp => {
-                            if (comp.mesh.position.equals(new THREE.Vector3(
-                                connection.geometry.attributes.position.array[0],
-                                connection.geometry.attributes.position.array[1],
-                                connection.geometry.attributes.position.array[2]
-                            ))) {
+                            if (comp.mesh.position.equals(this.startPos)) {
                                 startComponent = comp;
                             }
                         });
@@ -1761,19 +1760,12 @@
                 // Clear any existing highlights
                 clearAllHighlights();
                 
-                // Store components for later
+                // Store components and initialize state
                 this.targetComponent = targetComponent;
                 this.startComponent = startComponent;
-                this.hasCameraMoving = false;
-                this.hasHighlightedTarget = false;
+                this.onComplete = onComplete;
                 
-                // Start with focus on start component if available
-                if (startComponent) {
-                    startComponent.highlight();
-                    await cameraTracker.focusComponent(startComponent);
-                }
-                
-                // Start the flow after camera is in position
+                // Start the flow immediately
                 this.isRunning = true;
                 this.progress = 0;
                 this.startTime = Date.now();
@@ -1781,14 +1773,10 @@
                     p.mesh.visible = true;
                 });
                 
-                // Store components for later
-                this.targetComponent = targetComponent;
-                this.startComponent = startComponent;
-                this.onComplete = onComplete;
-                
-                // Reset state flags
-                this.hasCameraMoving = false;
-                this.hasHighlightedTarget = false;
+                // Just highlight the start component
+                if (startComponent) {
+                    startComponent.highlight();
+                }
             }
 
             stop() {
@@ -1797,11 +1785,10 @@
                 });
                 this.stopPulseEffect();
                 
-                // Ensure we stay focused on target component
+                // Just highlight the target component, camera is already focused
                 if (this.targetComponent) {
                     clearAllHighlights();
                     this.targetComponent.highlight();
-                    cameraTracker.focusComponent(this.targetComponent);
                 }
                 
                 if (this.onComplete) this.onComplete();
@@ -1815,17 +1802,9 @@
                 const duration = CONFIG.animations.flow.duration;
                 this.progress = Math.min(elapsed / duration, 1);
 
-                // At 30%, start moving camera to target (no highlight)
-                if (this.progress >= 0.3 && this.targetComponent && !this.hasCameraMoving) {
-                    this.hasCameraMoving = true;
-                    clearAllHighlights(); // Clear any lingering highlights
-                    // Don't await here since we want the animation to continue
-                    cameraTracker.focusComponent(this.targetComponent);
-                }
-
-                // At 50%, highlight the target
-                if (this.progress >= 0.5 && this.targetComponent && !this.hasHighlightedTarget) {
-                    this.hasHighlightedTarget = true;
+                // At 50%, clear start highlight and highlight target
+                if (this.progress >= 0.5 && this.targetComponent) {
+                    clearAllHighlights();
                     this.targetComponent.highlight();
                 }
 
@@ -2030,23 +2009,17 @@
 
             async executeStep({ 
                 status, 
-                component = null,
                 flow = null, 
                 action = null
             }) {
                 showStatus(status);
                 
-                if (flow && component) {
+                if (flow) {
                     return new Promise(async (resolve) => {
                         flow.startFlow(() => {
                             resolve();
-                        }, component);
+                        });
                     });
-                } else if (component) {
-                    clearAllHighlights();
-                    component.highlight();
-                    cameraTracker.focusComponent(component);
-                    await utils.delay(CONFIG.animations.flow.duration);
                 }
 
                 if (action) {
@@ -2091,13 +2064,11 @@
             const commitSteps = [
                 {
                     status: 'Developer committing changes...',
-                    component: components.developer,
                     flow: flows.devToLocal,
                     delayTime: 1500
                 },
                 {
                     status: 'Changes committed to local repository',
-                    component: components.local,
                     action: () => {
                         pipelineState.hasLocalChanges = true;
                         pipelineState.canPush = true;
@@ -2111,22 +2082,14 @@
         // Handle commit button click
         document.getElementById('commitButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing) {
-                focusSystem.focusComponent(components.developer);
-                setTimeout(() => handleCommit(), 1000);
-                setTimeout(() => {
-                    focusSystem.focusComponent(components.local);
-                }, 2500);
+                handleCommit();
             }
         });
 
         // Handle push button click
         document.getElementById('pushButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canPush && pipelineState.hasLocalChanges) {
-                focusSystem.focusComponent(components.local);
-                setTimeout(() => handleGitPush(), 1000);
-                setTimeout(() => {
-                    focusSystem.focusComponent(components.github);
-                }, 2500);
+                handleGitPush();
             } else {
                 showStatus('Cannot push: Ensure you have committed changes and no process is running');
             }
@@ -2135,11 +2098,7 @@
         // Handle PR button click
         document.getElementById('createPRButton').addEventListener('click', () => {
             if (!pipelineState.isProcessing && pipelineState.canCreatePR) {
-                focusSystem.focusComponent(components.github);
-                setTimeout(() => handlePRCreation(), 1000);
-                setTimeout(() => {
-                    focusSystem.focusComponent(components.githubActions);
-                }, 2500);
+                handlePRCreation();
             } else {
                 showStatus('Cannot create PR: Ensure you have pushed changes and no process is running');
             }
@@ -2189,19 +2148,16 @@
             const prSteps = [
                 {
                     status: 'Creating Pull Request...',
-                    component: components.github,
                     action: () => activePR.highlight(),
                     delayTime: 1000
                 },
                 {
                     status: 'PR triggering GitHub Actions...',
-                    component: components.githubActions,
                     flow: flows.prToActions,
                     delayTime: 2000
                 },
                 {
                     status: 'Starting CI Pipeline...',
-                    component: components.buildServer,
                     flow: flows.actionsToBuild,
                     delayTime: 1000
                 },
@@ -2231,13 +2187,11 @@
                 },
                 {
                     status: 'Deploying to test environment...',
-                    component: components.test,
                     flow: flows.deployTest,
                     delayTime: 2000
                 },
                 {
                     status: 'Deploying to production...',
-                    component: components.prod,
                     flow: flows.deployProd,
                     delayTime: 2000
                 },
@@ -2269,13 +2223,11 @@
             const pushSteps = [
                 {
                     status: 'Pushing to GitHub...',
-                    component: components.local,
                     flow: flows.gitPush,
                     delayTime: 1500
                 },
                 {
                     status: 'Changes pushed to GitHub',
-                    component: components.github,
                     delayTime: 1000,
                     action: () => {
                         pipelineState.canPush = false;
