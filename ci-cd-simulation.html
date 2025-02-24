@@ -75,6 +75,23 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         
+        // Component focus system
+        const focusSystem = {
+            currentComponent: null,
+            transitionDuration: 1000, // ms
+            
+            focusComponent: function(component) {
+                if (!component || !component.mesh) return;
+                this.currentComponent = component;
+                
+                // Smoothly move camera target to component
+                new TWEEN.Tween(controls.target)
+                    .to(component.mesh.position, this.transitionDuration)
+                    .easing(TWEEN.Easing.Cubic.InOut)
+                    .start();
+            }
+        };
+        
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
@@ -148,6 +165,10 @@
                         child.material.emissive = highlightColor;
                     }
                 });
+                
+                // Focus camera on this component
+                focusSystem.focusComponent(this);
+                
                 setTimeout(() => {
                     originalColors.forEach((color, obj) => {
                         obj.material.emissive = color;
