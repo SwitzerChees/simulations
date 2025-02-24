@@ -593,22 +593,59 @@
                 this.progressMesh.visible = true;
                 this.mesh.material.opacity = 0.8;
 
-                // Animate progress
-                return new Promise((resolve) => {
-                    const animate = () => {
-                        if (this.progress < 1) {
-                            this.progress += 0.02;
+                // Make the bar pulse while running
+                const startEmissive = this.mesh.material.emissiveIntensity;
+                const pulseAnimation = () => {
+                    if (this.isRunning) {
+                        this.mesh.material.emissiveIntensity = startEmissive + Math.sin(Date.now() * 0.005) * 0.3;
+                        requestAnimationFrame(pulseAnimation);
+                    }
+                };
+                pulseAnimation();
+
+                // Simulate different phases of the process
+                const phases = [
+                    { duration: 1000, progress: 0.2 },  // Initial phase
+                    { duration: 1500, progress: 0.5 },  // Middle phase
+                    { duration: 1000, progress: 0.8 },  // Almost done
+                    { duration: 500, progress: 1.0 }    // Completion
+                ];
+
+                for (const phase of phases) {
+                    const startProgress = this.progress;
+                    const progressDiff = phase.progress - startProgress;
+                    const startTime = Date.now();
+
+                    await new Promise(resolve => {
+                        const animate = () => {
+                            const elapsed = Date.now() - startTime;
+                            const progress = Math.min(elapsed / phase.duration, 1);
+                            
+                            // Use easeInOutCubic for smoother animation
+                            const eased = progress < 0.5
+                                ? 4 * progress * progress * progress
+                                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+                            this.progress = startProgress + (progressDiff * eased);
                             this.progressMesh.position.x = this.position.x - 1 + (this.progress * 2);
-                            if (this.progress < 1) {
+                            
+                            if (progress < 1) {
                                 requestAnimationFrame(animate);
                             } else {
-                                this.complete(shouldSucceed);
                                 resolve();
                             }
-                        }
-                    };
-                    animate();
-                });
+                        };
+                        animate();
+                    });
+
+                    // Add a small pause between phases
+                    if (phase.progress < 1) {
+                        await delay(200);
+                    }
+                }
+
+                this.isRunning = false;
+                this.complete(shouldSucceed);
             }
 
             complete(success) {
@@ -1047,19 +1084,19 @@
                 showStatus('Running linter...');
                 await buildSteps.lint.run(!simulateFailure);
                 if (!buildSteps.lint.isSuccess) throw new Error('Linting failed');
-                await delay(500);
+                await delay(1000);
 
                 // Run test step
                 showStatus('Running tests...');
                 await buildSteps.test.run(!simulateFailure);
                 if (!buildSteps.test.isSuccess) throw new Error('Tests failed');
-                await delay(500);
+                await delay(1000);
 
                 // Run build step
                 showStatus('Building project...');
                 await buildSteps.build.run(!simulateFailure);
                 if (!buildSteps.build.isSuccess) throw new Error('Build failed');
-                await delay(500);
+                await delay(1000);
 
                 flows.actionsToBuild.stop();
 
