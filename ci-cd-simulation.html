@@ -1729,11 +1729,15 @@
                     const geometryFn = geometries[Math.floor(Math.random() * geometries.length)];
                     const geometry = geometryFn(size);
                     
+                    const particleColor = (!document.getElementById('lintingCheck').checked || 
+                        !document.getElementById('testingCheck').checked || 
+                        !document.getElementById('buildingCheck').checked) ? CONFIG.colors.error : this.color;
+                    
                     const material = new THREE.MeshPhongMaterial({
-                        color: this.color,
+                        color: particleColor,
                         transparent: true,
                         opacity: 0.9,
-                        emissive: this.color,
+                        emissive: particleColor,
                         emissiveIntensity: 0.7,
                         shininess: 50
                     });
@@ -1939,16 +1943,22 @@
         }
 
         // Create particle flows for each path after ParticleFlow class is defined
+        const getFlowColor = () => {
+            return (!document.getElementById('lintingCheck').checked || 
+                    !document.getElementById('testingCheck').checked || 
+                    !document.getElementById('buildingCheck').checked) ? CONFIG.colors.error : CONFIG.colors.success;
+        };
+
         const flows = {
-            devToLocal: new ParticleFlow(components.developer, components.local),
-            gitPush: new ParticleFlow(components.local, components.github),
-            prToActions: new ParticleFlow(components.github, components.githubActions),
-            actionsToBuild: new ParticleFlow(components.githubActions, components.buildServer),
-            buildToTest: new ParticleFlow(components.buildServer, components.test),
-            testToProd: new ParticleFlow(components.test, components.prod),
+            devToLocal: new ParticleFlow(components.developer, components.local, getFlowColor()),
+            gitPush: new ParticleFlow(components.local, components.github, getFlowColor()),
+            prToActions: new ParticleFlow(components.github, components.githubActions, getFlowColor()),
+            actionsToBuild: new ParticleFlow(components.githubActions, components.buildServer, getFlowColor()),
+            buildToTest: new ParticleFlow(components.buildServer, components.test, getFlowColor()),
+            testToProd: new ParticleFlow(components.test, components.prod, getFlowColor()),
             buildToDev: new ParticleFlow(components.buildServer, components.developer, CONFIG.colors.error),
-            deployTest: new ParticleFlow(components.buildServer, components.test, CONFIG.colors.success),
-            deployProd: new ParticleFlow(components.test, components.prod, CONFIG.colors.success),
+            deployTest: new ParticleFlow(components.buildServer, components.test, getFlowColor()),
+            deployProd: new ParticleFlow(components.test, components.prod, getFlowColor()),
             feedbackToDev: new ParticleFlow(components.buildServer, components.developer, CONFIG.colors.error)
         };
 
