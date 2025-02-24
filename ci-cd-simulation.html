@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Pipeline Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">CI/CD Pipeline Simulation<br>Click components to interact</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 15;
+        camera.position.y = 5;
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Text sprite creation helper
+        function createTextSprite(text, position, scale = 1) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 128;
+
+            context.font = '24px Arial';
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.fillText(text, 128, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.copy(position);
+            sprite.scale.set(scale * 4, scale * 2, 1);
+            return sprite;
+        }
+
+        // Components
+        class Component {
+            constructor(geometry, material, position, name) {
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(position);
+                this.name = name;
+                this.mesh.userData.component = this;
+                scene.add(this.mesh);
+
+                // Add component label
+                const labelPos = position.clone();
+                labelPos.y += 2;
+                this.label = createTextSprite(name, labelPos);
+                scene.add(this.label);
+            }
+
+            highlight() {
+                this.mesh.material.emissive.setHex(0x00ff00);
+                setTimeout(() => {
+                    this.mesh.material.emissive.setHex(0x000000);
+                }, 1000);
+            }
+        }
+
+        // Create components
+        const components = {
+            local: new Component(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshPhongMaterial({ color: 0x4CAF50 }),
+                new THREE.Vector3(-8, 0, 0),
+                'Local Git'
+            ),
+            github: new Component(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshPhongMaterial({ color: 0x2196F3 }),
+                new THREE.Vector3(-4, 0, 0),
+                'GitHub'
+            ),
+            buildServer: new Component(
+                new THREE.BoxGeometry(2, 3, 2),
+                new THREE.MeshPhongMaterial({ color: 0xFF9800 }),
+                new THREE.Vector3(0, 0, 0),
+                'Build Server'
+            ),
+            test: new Component(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshPhongMaterial({ color: 0x9C27B0 }),
+                new THREE.Vector3(4, 0, 0),
+                'Test Env'
+            ),
+            prod: new Component(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshPhongMaterial({ color: 0xF44336 }),
+                new THREE.Vector3(8, 0, 0),
+                'Production'
+            )
+        };
+
+        // Create connection lines and action labels
+        const connectionMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+        const connections = [];
+        const actionLabels = [];
+
+        function createConnection(start, end, actionText) {
+            // Create connection line
+            const points = [];
+            points.push(start.mesh.position);
+            points.push(end.mesh.position);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, connectionMaterial);
+            scene.add(line);
+            connections.push(line);
+
+            // Create action label
+            const midPoint = new THREE.Vector3().lerpVectors(start.mesh.position, end.mesh.position, 0.5);
+            midPoint.y += 1;
+            const actionLabel = createTextSprite(actionText, midPoint, 0.7);
+            scene.add(actionLabel);
+            actionLabels.push(actionLabel);
+        }
+
+        // Create connections between components with action labels
+        createConnection(components.local, components.github, 'git push');
+        createConnection(components.github, components.buildServer, 'PR + CI Trigger');
+        createConnection(components.buildServer, components.test, 'Deploy to Test');
+        createConnection(components.test, components.prod, 'Deploy to Prod');
+
+        // Particle system for code flow
+        const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const particleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+
+        class ParticleFlow {
+            constructor(start, end) {
+                this.particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                this.start = start;
+                this.end = end;
+                this.progress = 0;
+                scene.add(this.particle);
+            }
+
+            update() {
+                this.progress += 0.01;
+                if (this.progress > 1) {
+                    this.progress = 0;
+                }
+                this.particle.position.lerpVectors(this.start, this.end, this.progress);
+            }
+        }
+
+        const flows = [
+            new ParticleFlow(components.local.mesh.position, components.github.mesh.position),
+            new ParticleFlow(components.github.mesh.position, components.buildServer.mesh.position),
+            new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position),
+            new ParticleFlow(components.test.mesh.position, components.prod.mesh.position)
+        ];
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Update particle flows
+            flows.forEach(flow => flow.update());
+
+            // Update labels to face camera
+            Object.values(components).forEach(component => {
+                component.label.quaternion.copy(camera.quaternion);
+            });
+            actionLabels.forEach(label => {
+                label.quaternion.copy(camera.quaternion);
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Handle component clicking
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                if (object.userData.component) {
+                    object.userData.component.highlight();
+                }
+            }
+        });
+
+        animate();
+    </script>
+</body>
+</html>
