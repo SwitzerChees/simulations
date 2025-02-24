@@ -890,22 +890,23 @@
             }
 
             startFlow(onComplete) {
+                this.createParticles(); // Recreate particles if they were cleaned up
                 this.isRunning = true;
                 this.progress = 0;
                 this.particles.forEach(p => {
                     p.mesh.visible = true;
-                    this.startPulse(p.mesh, p.mesh.material.emissiveIntensity);
+                    this.startPulse(p.mesh, 0.5);
                 });
                 this.onComplete = onComplete;
             }
 
             stop() {
-                this.isRunning = false;
                 this.particles.forEach(p => {
                     p.mesh.visible = false;
                 });
                 this.stopPulseEffect();
                 if (this.onComplete) this.onComplete();
+                this.isRunning = false;
             }
 
             update() {
@@ -936,10 +937,18 @@
                 }
             }
 
-            // Maintain compatibility with old API
-            stop() {
-                this.active = false;
-                this.particles.forEach(p => p.mesh.visible = false);
+            cleanup() {
+                this.particles.forEach(p => {
+                    scene.remove(p.mesh);
+                    if (p.mesh.material) {
+                        p.mesh.material.dispose();
+                    }
+                    if (p.mesh.geometry) {
+                        p.mesh.geometry.dispose();
+                    }
+                });
+                this.particles = [];
+                this.isRunning = false;
             }
         }
 
@@ -1341,7 +1350,11 @@
             TWEEN.update();
 
             // Update flows
-            Object.values(flows).forEach(flow => flow.update());
+            Object.values(flows).forEach(flow => {
+                if (flow.isRunning) {
+                    flow.update();
+                }
+            });
 
             // Update labels to face camera
             Object.values(components).forEach(component => {
