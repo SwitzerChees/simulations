@@ -337,10 +337,15 @@
             // Calculate movement direction
             const moveDirection = new THREE.Vector3();
             
+            // Forward/backward movement along camera's forward direction
             if (moveState.forward) moveDirection.add(forward);
             if (moveState.backward) moveDirection.sub(forward);
+            
+            // Left/right movement along camera's right vector
             if (moveState.right) moveDirection.add(right);
             if (moveState.left) moveDirection.sub(right);
+            
+            // Up/down movement along world up vector
             if (moveState.up) moveDirection.add(camera.up);
             if (moveState.down) moveDirection.sub(camera.up);
             
@@ -348,6 +353,7 @@
             if (moveDirection.length() > 0) {
                 moveDirection.normalize();
                 camera.position.add(moveDirection.multiplyScalar(speed));
+                updateControlTarget(); // Update control target to maintain relative rotation point
             }
         };
 
@@ -355,6 +361,14 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.enablePan = false;  // Disable panning since we're using keyboard
+        controls.target.copy(camera.position).add(new THREE.Vector3(0, 0, -1)); // Set target in front of camera
+        
+        // Update the target position when camera moves
+        const updateControlTarget = () => {
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            controls.target.copy(camera.position).add(forward);
+        };
         
         // Smooth camera tracking system
         class CameraTracker {
