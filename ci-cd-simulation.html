@@ -29,7 +29,23 @@
         <div class="flex flex-wrap gap-2 max-w-[600px]"></div>
     </div>
     <div id="controls" class="absolute top-2.5 right-2.5 bg-white/90 p-2.5 rounded-md shadow-md flex flex-col gap-1.5">
-        <button id="commitButton" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors duration-200 cursor-pointer">Commit Changes</button>
+        <div class="flex flex-col gap-2">
+            <button id="commitButton" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors duration-200 cursor-pointer">Commit Changes</button>
+            <div class="flex flex-col gap-1 text-sm bg-gray-100 p-2 rounded">
+                <label class="flex items-center gap-1 cursor-pointer hover:text-gray-700">
+                    <input type="checkbox" id="lintingCheck" checked>
+                    <span>Passes Linting</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer hover:text-gray-700">
+                    <input type="checkbox" id="testingCheck" checked>
+                    <span>Passes Tests</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer hover:text-gray-700">
+                    <input type="checkbox" id="buildingCheck" checked>
+                    <span>Builds Successfully</span>
+                </label>
+            </div>
+        </div>
         <button id="pushButton" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors duration-200 cursor-pointer">Git Push</button>
         <button id="createPRButton" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors duration-200 cursor-pointer">Create PR</button>
     </div>
@@ -2007,7 +2023,12 @@
                     isProcessing: false,
                     canCommit: true,
                     hasLocalChanges: false,
-                    currentAction: null
+                    currentAction: null,
+                    codeQuality: {
+                        linting: true,
+                        testing: true,
+                        building: true
+                    }
                 };
             }
 
@@ -2063,8 +2084,17 @@
                 return;
             }
 
+            // Get code quality settings
+            pipelineState.codeQuality = {
+                linting: document.getElementById('lintingCheck').checked,
+                testing: document.getElementById('testingCheck').checked,
+                building: document.getElementById('buildingCheck').checked
+            };
+
             pipelineState.currentAction = 'commit';
             updatePathColors(['devToLocal']);
+
+            const qualityStatus = `(Linting: ${pipelineState.codeQuality.linting ? '✓' : '✗'}, Testing: ${pipelineState.codeQuality.testing ? '✓' : '✗'}, Building: ${pipelineState.codeQuality.building ? '✓' : '✗'})`;
 
             const commitSteps = [
                 {
@@ -2074,7 +2104,7 @@
                     delayTime: 1500
                 },
                 {
-                    status: 'Changes committed to local repository',
+                    status: `Changes committed to local repository ${qualityStatus}`,
                     action: () => {
                         pipelineState.hasLocalChanges = true;
                         pipelineState.canPush = true;
@@ -2168,31 +2198,74 @@
                     flow: flows.actionsToBuild,
                     targetComponent: components.buildServer,
                     delayTime: 1000
-                },
-                {
-                    status: 'Running linter...',
-                    action: async () => {
-                        await buildSteps.lint.run(!simulateFailure);
-                        if (!buildSteps.lint.isSuccess) throw new Error('Linting failed');
+                }
+            ];
+
+            // Add linting step if needed
+            if (!pipelineState.codeQuality.linting) {
+                prSteps.push({
+                    status: 'Linting failed! ❌ Check code style and formatting.',
+                    flow: flows.buildToDev,
+                    targetComponent: components.developer,
+                    delayTime: 2000
+                });
+                await flowManager.runPipeline(prSteps);
+                showStatus('Pipeline failed at linting stage');
+                return;
+            }
+            prSteps.push({
+                status: 'Linting passed ✓',
+                delayTime: 1000
+            });
+
+            // Add testing step if needed
+            if (!pipelineState.codeQuality.testing) {
+                prSteps.push(
+                    {
+                        status: 'Running tests...',
+                        delayTime: 1000
                     },
-                    delayTime: 1000
-                },
-                {
-                    status: 'Running tests...',
-                    action: async () => {
-                        await buildSteps.test.run(!simulateFailure);
-                        if (!buildSteps.test.isSuccess) throw new Error('Tests failed');
+                    {
+                        status: 'Tests failed! ❌ Fix failing tests.',
+                        flow: flows.buildToDev,
+                        targetComponent: components.developer,
+                        delayTime: 2000
+                    }
+                );
+                await flowManager.runPipeline(prSteps);
+                showStatus('Pipeline failed at testing stage');
+                return;
+            }
+            prSteps.push({
+                status: 'Tests passed ✓',
+                delayTime: 1000
+            });
+
+            // Add building step if needed
+            if (!pipelineState.codeQuality.building) {
+                prSteps.push(
+                    {
+                        status: 'Running build process...',
+                        delayTime: 1000
                     },
-                    delayTime: 1000
-                },
-                {
-                    status: 'Building project...',
-                    action: async () => {
-                        await buildSteps.build.run(!simulateFailure);
-                        if (!buildSteps.build.isSuccess) throw new Error('Build failed');
-                    },
-                    delayTime: 1000
-                },
+                    {
+                        status: 'Build failed! ❌ Fix build errors.',
+                        flow: flows.buildToDev,
+                        targetComponent: components.developer,
+                        delayTime: 2000
+                    }
+                );
+                await flowManager.runPipeline(prSteps);
+                showStatus('Pipeline failed at build stage');
+                return;
+            }
+            prSteps.push({
+                status: 'Build successful ✓',
+                delayTime: 1000
+            });
+
+            // Add deployment steps if all checks passed
+            prSteps.push(
                 {
                     status: 'Deploying to test environment...',
                     flow: flows.deployTest,
@@ -2212,7 +2285,7 @@
                     },
                     delayTime: 500
                 }
-            ];
+            );
 
             try {
                 await flowManager.runPipeline(prSteps);
