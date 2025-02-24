@@ -24,9 +24,10 @@
         <div class="mb-2.5 text-sm text-gray-600">Click components to interact</div>
         <div id="historyLog" class="flex flex-col gap-1.5"></div>
     </div>
-    <div id="controls" class="absolute top-2.5 right-2.5 bg-white/90 p-2.5 rounded-md shadow-md">
-        <button id="commitButton" class="m-1.5 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors duration-200 cursor-pointer">Commit Changes</button>
-        <button id="createPRButton" class="m-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors duration-200 cursor-pointer">Create PR</button>
+    <div id="controls" class="absolute top-2.5 right-2.5 bg-white/90 p-2.5 rounded-md shadow-md flex flex-col gap-1.5">
+        <button id="commitButton" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors duration-200 cursor-pointer">Commit Changes</button>
+        <button id="pushButton" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors duration-200 cursor-pointer">Git Push</button>
+        <button id="createPRButton" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors duration-200 cursor-pointer">Create PR</button>
     </div>
     <div id="status" class="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/90 px-8 py-4 rounded-md shadow-md text-gray-800 text-lg text-center opacity-0 transition-opacity duration-300">Ready</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
@@ -81,6 +82,19 @@
                     .to(component.mesh.position, this.transitionDuration)
                     .easing(TWEEN.Easing.Cubic.InOut)
                     .start();
+            },
+
+            focusSequence: async function(fromComponent, toComponent, duration = 2000) {
+                // Focus on sending component
+                this.focusComponent(fromComponent);
+                
+                // Wait for the first focus to complete
+                await new Promise(resolve => setTimeout(resolve, this.transitionDuration));
+                
+                // Then focus on receiving component
+                setTimeout(() => {
+                    this.focusComponent(toComponent);
+                }, duration - this.transitionDuration);
             }
         };
         
@@ -772,7 +786,57 @@
             });
         };
 
-        document.getElementById('commitButton').addEventListener('click', handleCommit);
+        // Handle commit button click
+        document.getElementById('commitButton').addEventListener('click', () => {
+            if (!pipelineState.isProcessing) {
+                handleCommit();
+                focusSystem.focusSequence(components.developer, components.local);
+            }
+        });
+
+        // Handle push button click
+        document.getElementById('pushButton').addEventListener('click', () => {
+            if (!pipelineState.isProcessing && pipelineState.canPush && pipelineState.hasLocalChanges) {
+                handleGitPush();
+                focusSystem.focusSequence(components.local, components.github);
+            } else {
+                showStatus('Cannot push: Ensure you have committed changes and no process is running');
+            }
+        });
+
+        // Git push handler
+        const handleGitPush = async () => {
+            pipelineState.isProcessing = true;
+            pipelineState.currentAction = 'push';
+            showStatus('Pushing to GitHub...');
+            
+            try {
+                // Start particle flow animation
+                flows.gitPush.startFlow(() => {
+                    // This callback will be called when the flow animation completes
+                });
+                
+                // Simulate network delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Update state
+                pipelineState.canPush = false;
+                pipelineState.canCreatePR = true;
+                pipelineState.hasLocalChanges = false;
+                
+                // Show success feedback
+                showStatus('Successfully pushed to GitHub');
+                
+                // Update connection colors
+                updatePathColors(['gitPush']);
+                
+            } catch (error) {
+                console.error('Error in git push:', error);
+                showStatus('Error pushing to GitHub. Please try again.');
+            } finally {
+                pipelineState.isProcessing = false;
+            }
+        };
 
         // Animation loop
         function animate() {
@@ -832,20 +896,8 @@
                     component.highlight();
 
                     if (component === components.local && pipelineState.canPush && pipelineState.hasLocalChanges) {
-                        // Handle git push
-                        pipelineState.isProcessing = true;
-                        pipelineState.currentAction = 'push';
-                        if (!pipelineState.hasLocalChanges) {
-                            showStatus('No local changes to push. Commit your changes first!');
-                            return;
-                        }
-                        showStatus('Pushing code changes to GitHub...');
-                        flows.gitPush.startFlow(() => {
-                            showStatus('Code pushed successfully! Click GitHub to create PR');
-                            pipelineState.canPush = false;
-                            pipelineState.canCreatePR = true;
-                            pipelineState.isProcessing = false;
-                        });
+                        handleGitPush();
+                        focusSystem.focusSequence(components.local, components.github);
                     } 
                     else if (component === components.github && pipelineState.canCreatePR) {
                         // Handle PR creation
