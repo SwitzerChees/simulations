@@ -79,13 +79,19 @@
                     pauseBetweenPhases: 200
                 },
                 flow: {
-                    particleCount: 25,
-                    particleSizeRange: { min: 0.15, max: 0.3 },
-                    speed: 0.002,
-                    rotationSpeed: 0.01,
-                    trailLength: 0.3,  // Shorter trail for tighter sync
-                    duration: 2500,     // Faster animation
-                    fadeInDuration: 0.1 // Quick fade in
+                    particleCount: 35,  // Increased for better visibility
+                    particleSizeRange: { min: 0.2, max: 0.4 },  // Larger particles
+                    speed: 0.003,  // Slightly faster
+                    rotationSpeed: 0.015,
+                    trailLength: 0.4,  // Longer trail for better visibility
+                    duration: 2000,     // Faster feedback
+                    fadeInDuration: 0.15, // Smoother fade in
+                    errorParticles: {
+                        count: 45,  // More particles for errors
+                        sizeRange: { min: 0.25, max: 0.5 },
+                        speed: 0.004,
+                        pulseIntensity: 1.5
+                    }
                 }
             },
             colors: {
@@ -1677,7 +1683,7 @@
             actionsToBuild: createConnection(components.githubActions, components.buildServer, 'CI Jobs'),
             buildToTest: createConnection(components.buildServer, components.test, 'Deploy to Test'),
             testToProd: createConnection(components.test, components.prod, 'Deploy to Prod'),
-            feedbackToDev: createConnection(components.buildServer, components.developer, 'CI Feedback')
+            buildToDev: createConnection(components.buildServer, components.developer, 'CI Feedback')
         };
 
         // Function to update path colors
@@ -1690,10 +1696,11 @@
 
         // Particle system for code flow
         class ParticleFlow extends AnimatedEntity {
-            constructor(start, end, color = CONFIG.colors.success) {
+            constructor(start, end, color = CONFIG.colors.success, isError = false) {
                 super();
                 this.startPos = typeof start === 'object' && start.mesh ? start.mesh.position : start;
                 this.endPos = typeof end === 'object' && end.mesh ? end.mesh.position : end;
+                this.isError = isError;
                 this.color = color;
                 this.particles = [];
                 this.progress = 0;
@@ -1702,8 +1709,9 @@
             }
 
             createParticles() {
-                const particleCount = CONFIG.animations.flow.particleCount;
-                const sizeRange = CONFIG.animations.flow.particleSizeRange;
+                const config = this.isError ? CONFIG.animations.flow.errorParticles : CONFIG.animations.flow;
+                const particleCount = config.count || CONFIG.animations.flow.particleCount;
+                const sizeRange = config.sizeRange || CONFIG.animations.flow.particleSizeRange;
                 
                 const geometries = [
                     (size) => new THREE.OctahedronGeometry(size),
@@ -1931,17 +1939,18 @@
             }
         }
 
-
-
-        // Create flows for each connection
+        // Create particle flows for each path after ParticleFlow class is defined
         const flows = {
-            devToLocal: new ParticleFlow(components.developer.mesh.position, components.local.mesh.position, 0x4CAF50),
-            gitPush: new ParticleFlow(components.local.mesh.position, components.github.mesh.position, 0x4CAF50),
-            prToActions: new ParticleFlow(new THREE.Vector3(-4, 0, 0), new THREE.Vector3(-8, 6, 0), 0xFFC107),  // PR to GitHub Actions
-            actionsToBuild: new ParticleFlow(new THREE.Vector3(-8, 6, 0), new THREE.Vector3(-8, -8, 0), 0xFF9800),  // GitHub Actions to Build Server
-            deployTest: new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position, 0x9C27B0),
-            deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336),
-            feedbackToDev: new ParticleFlow(components.buildServer.mesh.position, components.developer.mesh.position, 0xFF0000)  // Red for failure feedback
+            devToLocal: new ParticleFlow(components.developer, components.local),
+            gitPush: new ParticleFlow(components.local, components.github),
+            prToActions: new ParticleFlow(components.github, components.githubActions),
+            actionsToBuild: new ParticleFlow(components.githubActions, components.buildServer),
+            buildToTest: new ParticleFlow(components.buildServer, components.test),
+            testToProd: new ParticleFlow(components.test, components.prod),
+            buildToDev: new ParticleFlow(components.buildServer, components.developer, CONFIG.colors.error),
+            deployTest: new ParticleFlow(components.buildServer, components.test, CONFIG.colors.success),
+            deployProd: new ParticleFlow(components.test, components.prod, CONFIG.colors.success),
+            feedbackToDev: new ParticleFlow(components.buildServer, components.developer, CONFIG.colors.error)
         };
 
         const githubActions = new GitHubActions(components.github.mesh.position);
@@ -2141,10 +2150,22 @@
         });
 
         // Build step helper function
-        const runBuildStep = async (status, message, duration) => {
+        const runBuildStep = async (status, message, duration, isError = false) => {
             return new Promise((resolve, reject) => {
                 showStatus(message);
                 status.visible = true;
+                
+                // If this is an error step, create error feedback particles
+                if (isError) {
+                    const errorFlow = new ParticleFlow(
+                        components.gitHubActions.mesh.position,
+                        components.developer.mesh.position,
+                        CONFIG.colors.error,
+                        true
+                    );
+                    errorFlow.start();
+                }
+
                 setTimeout(() => {
                     // 80% chance of success
                     if (Math.random() > 0.2) {
@@ -2166,6 +2187,13 @@
             pipelineState.canCreatePR = false;
             updatePathColors(['prToActions']);
 
+            // Get code quality status
+            const codeQuality = {
+                linting: document.getElementById('lintingCheck').checked,
+                testing: document.getElementById('testingCheck').checked,
+                building: document.getElementById('buildingCheck').checked
+            };
+
             // Reset all build steps
             Object.values(buildSteps).forEach(step => step.reset());
 
@@ -2181,7 +2209,8 @@
                 0xFFEB3B
             );
 
-            const prSteps = [
+            // Initial PR creation and trigger steps
+            await flowManager.runPipeline([
                 {
                     status: 'Creating Pull Request...',
                     action: () => activePR.highlight(),
@@ -2199,99 +2228,160 @@
                     targetComponent: components.buildServer,
                     delayTime: 1000
                 }
-            ];
+            ]);
 
-            // Add linting step if needed
+            // Run linting step
+            await flowManager.runPipeline([
+                {
+                    status: 'Running linting...',
+                    flow: flows.actionsToBuild,
+                    targetComponent: components.buildServer,
+                    delayTime: 1000
+                }
+            ]);
+            
             if (!pipelineState.codeQuality.linting) {
-                prSteps.push({
-                    status: 'Linting failed! ❌ Check code style and formatting.',
-                    flow: flows.buildToDev,
-                    targetComponent: components.developer,
-                    delayTime: 2000
-                });
-                await flowManager.runPipeline(prSteps);
+                await flowManager.runPipeline([
+                    {
+                        status: 'Linting failed! ❌ Check code style and formatting.',
+                        delayTime: 1000
+                    }
+                ]);
+                await flowManager.runPipeline([
+                    {
+                        status: 'Sending feedback to developer...',
+                        flow: flows.buildToDev,
+                        targetComponent: components.developer,
+                        delayTime: 2000
+                    }
+                ]);
                 showStatus('Pipeline failed at linting stage');
                 return;
             }
-            prSteps.push({
+
+            await flowManager.runPipeline([{
                 status: 'Linting passed ✓',
                 delayTime: 1000
-            });
+            }]);
 
-            // Add testing step if needed
+            // Run testing step
+            await flowManager.runPipeline([{
+                status: 'Running tests...',
+                flow: flows.actionsToBuild,
+                targetComponent: components.buildServer,
+                delayTime: 1000
+            }]);
+            
             if (!pipelineState.codeQuality.testing) {
-                prSteps.push(
-                    {
-                        status: 'Running tests...',
-                        delayTime: 1000
-                    },
+                await flowManager.runPipeline([
                     {
                         status: 'Tests failed! ❌ Fix failing tests.',
+                        delayTime: 1000
+                    }
+                ]);
+                await flowManager.runPipeline([
+                    {
+                        status: 'Sending feedback to developer...',
                         flow: flows.buildToDev,
                         targetComponent: components.developer,
                         delayTime: 2000
                     }
-                );
-                await flowManager.runPipeline(prSteps);
+                ]);
                 showStatus('Pipeline failed at testing stage');
                 return;
             }
-            prSteps.push({
+
+            await flowManager.runPipeline([{
                 status: 'Tests passed ✓',
                 delayTime: 1000
-            });
+            }]);
 
-            // Add building step if needed
+            // Run build step
+            await flowManager.runPipeline([{
+                status: 'Building project...',
+                flow: flows.actionsToBuild,
+                targetComponent: components.buildServer,
+                delayTime: 1000
+            }]);
+            
             if (!pipelineState.codeQuality.building) {
-                prSteps.push(
-                    {
-                        status: 'Running build process...',
-                        delayTime: 1000
-                    },
+                await flowManager.runPipeline([
                     {
                         status: 'Build failed! ❌ Fix build errors.',
+                        delayTime: 1000
+                    }
+                ]);
+                await flowManager.runPipeline([
+                    {
+                        status: 'Sending feedback to developer...',
                         flow: flows.buildToDev,
                         targetComponent: components.developer,
                         delayTime: 2000
                     }
-                );
-                await flowManager.runPipeline(prSteps);
+                ]);
                 showStatus('Pipeline failed at build stage');
                 return;
             }
-            prSteps.push({
+
+            await flowManager.runPipeline([{
                 status: 'Build successful ✓',
                 delayTime: 1000
-            });
+            }]);
 
-            // Add deployment steps if all checks passed
-            prSteps.push(
-                {
-                    status: 'Deploying to test environment...',
-                    flow: flows.deployTest,
-                    targetComponent: components.test,
-                    delayTime: 2000
-                },
-                {
-                    status: 'Deploying to production...',
-                    flow: flows.deployProd,
-                    targetComponent: components.prod,
-                    delayTime: 2000
-                },
-                {
-                    status: 'Pipeline completed successfully!',
-                    action: () => {
-                        pipelineState.canCommit = true;
-                    },
-                    delayTime: 500
-                }
-            );
-
+            // Run deployment steps if all checks passed
             try {
-                await flowManager.runPipeline(prSteps);
+                // Run each step based on code quality status
+                if (codeQuality.linting) {
+                    await runBuildStep(buildSteps.lint, 'Running linter...', 2000);
+                } else {
+                    await runBuildStep(buildSteps.lint, 'Linting failed!', 2000, true);
+                    throw new Error('Linting failed');
+                }
+
+                if (codeQuality.testing) {
+                    await runBuildStep(buildSteps.test, 'Running tests...', 3000);
+                } else {
+                    await runBuildStep(buildSteps.test, 'Tests failed!', 2000, true);
+                    throw new Error('Tests failed');
+                }
+
+                if (codeQuality.building) {
+                    await runBuildStep(buildSteps.build, 'Building...', 4000);
+                } else {
+                    await runBuildStep(buildSteps.build, 'Build failed!', 2000, true);
+                    throw new Error('Build failed');
+                }
+
+                // If all steps pass, continue with deployment
+                await flowManager.runPipeline([
+                    {
+                        status: 'Deploying to test environment...',
+                        flow: flows.deployTest,
+                        targetComponent: components.test,
+                        delayTime: 2000
+                    },
+                    {
+                        status: 'Deploying to production...',
+                        flow: flows.deployProd,
+                        targetComponent: components.prod,
+                        delayTime: 2000
+                    },
+                    {
+                        status: 'Pipeline completed successfully!',
+                        action: () => {
+                            pipelineState.canCommit = true;
+                        },
+                        delayTime: 500
+                    }
+                ]);
             } catch (error) {
                 console.error('Error in PR creation:', error);
-                flows.feedbackToDev.startFlow();
+                await flowManager.runPipeline([{
+                    status: 'Sending feedback to developer...',
+                    flow: flows.buildToDev,
+                    targetComponent: components.developer,
+                    delayTime: 2000
+                }]);
                 await utils.delay(2000);
                 flows.feedbackToDev.stop();
                 pipelineState.canCommit = true;
