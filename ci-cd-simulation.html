@@ -245,8 +245,116 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
         
+        // Camera movement constants and state
+        const CAMERA_SPEED = 0.5;
+        const FAST_MULTIPLIER = 2;
+        
+        const moveState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            fast: false
+        };
+
+        // Keyboard controls
+        window.addEventListener('keydown', (event) => {
+            switch(event.key.toLowerCase()) {
+                case 'w':
+                case 'arrowup':
+                    moveState.forward = true;
+                    break;
+                case 's':
+                case 'arrowdown':
+                    moveState.backward = true;
+                    break;
+                case 'a':
+                case 'arrowleft':
+                    moveState.left = true;
+                    break;
+                case 'd':
+                case 'arrowright':
+                    moveState.right = true;
+                    break;
+                case 'e':
+                case ' ':
+                    moveState.up = true;
+                    break;
+                case 'q':
+                    moveState.down = true;
+                    break;
+                case 'shift':
+                    moveState.fast = true;
+                    break;
+            }
+        });
+
+        window.addEventListener('keyup', (event) => {
+            switch(event.key.toLowerCase()) {
+                case 'w':
+                case 'arrowup':
+                    moveState.forward = false;
+                    break;
+                case 's':
+                case 'arrowdown':
+                    moveState.backward = false;
+                    break;
+                case 'a':
+                case 'arrowleft':
+                    moveState.left = false;
+                    break;
+                case 'd':
+                case 'arrowright':
+                    moveState.right = false;
+                    break;
+                case 'e':
+                case ' ':
+                    moveState.up = false;
+                    break;
+                case 'q':
+                    moveState.down = false;
+                    break;
+                case 'shift':
+                    moveState.fast = false;
+                    break;
+            }
+        });
+
+        // Camera movement function
+        const updateCamera = () => {
+            const speed = moveState.fast ? CAMERA_SPEED * FAST_MULTIPLIER : CAMERA_SPEED;
+            
+            // Get camera's forward direction
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            
+            // Get camera's right direction
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, camera.up).normalize();
+            
+            // Calculate movement direction
+            const moveDirection = new THREE.Vector3();
+            
+            if (moveState.forward) moveDirection.add(forward);
+            if (moveState.backward) moveDirection.sub(forward);
+            if (moveState.right) moveDirection.add(right);
+            if (moveState.left) moveDirection.sub(right);
+            if (moveState.up) moveDirection.add(camera.up);
+            if (moveState.down) moveDirection.sub(camera.up);
+            
+            // Normalize and apply movement
+            if (moveDirection.length() > 0) {
+                moveDirection.normalize();
+                camera.position.add(moveDirection.multiplyScalar(speed));
+            }
+        };
+
+        // Initialize OrbitControls for mouse rotation
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
+        controls.enablePan = false;  // Disable panning since we're using keyboard
         
         // Smooth camera tracking system
         class CameraTracker {
@@ -2505,8 +2613,8 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            // Update camera tracking
-            cameraTracker.update();
+            // Update camera movement and controls
+            updateCamera();
             controls.update();
 
             // Update component animations
