@@ -37,6 +37,7 @@
 <body>
     <div id="info">CI/CD Pipeline Simulation<br>Click components to interact</div>
     <div id="status">Ready</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -594,6 +595,7 @@
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
+            TWEEN.update();
 
             // Update flows
             Object.values(flows).forEach(flow => flow.update());
