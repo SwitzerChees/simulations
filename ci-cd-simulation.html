@@ -49,7 +49,7 @@
         <button id="pushButton" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors duration-200 cursor-pointer">Git Push</button>
         <button id="createPRButton" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors duration-200 cursor-pointer">Create PR</button>
     </div>
-    <div id="status" class="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/90 px-8 py-4 rounded-md shadow-md text-gray-800 text-lg text-center opacity-0 transition-opacity duration-300">Ready</div>
+    <div id="status" class="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/90 px-8 py-4 rounded-md shadow-md text-gray-800 text-lg text-center opacity-0 transition-opacity break-word duration-300 max-w-96">Ready</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <script type="importmap">
         {
@@ -246,7 +246,7 @@
         document.body.appendChild(renderer.domElement);
         
         // Camera movement constants and state
-        const CAMERA_SPEED = 0.5;
+        const CAMERA_SPEED = 0.25;  // Reduced from 0.5 for smoother movement
         const FAST_MULTIPLIER = 2;
         
         const moveState = {
@@ -1805,7 +1805,7 @@
                 this.mesh.material.emissive.setHex(resultColor);
                 this.label.material.map.dispose();
                 this.label = createTextSprite(
-                    `${this.name} ${success ? '✓' : '✗'}`,
+                    `${this.name} ${success ? '✅' : '❌'}`,
                     new THREE.Vector3(this.position.x, this.position.y + 0.5, this.position.z)
                 );
             }
@@ -2118,7 +2118,7 @@
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     this.processLabels[i].material.map.dispose();
                     this.processLabels[i] = createTextSprite(
-                        `${this.processes[i]} ✓`,
+                        `${this.processes[i]} ✅`,
                         this.processLabels[i].position
                     );
                 }
@@ -2304,7 +2304,7 @@
             pipelineState.currentAction = 'commit';
             updatePathColors(['devToLocal']);
 
-            const qualityStatus = `(Linting: ${pipelineState.codeQuality.linting ? '✓' : '✗'}, Testing: ${pipelineState.codeQuality.testing ? '✓' : '✗'}, Building: ${pipelineState.codeQuality.building ? '✓' : '✗'})`;
+            const qualityStatus = `(Linting: ${pipelineState.codeQuality.linting ? '✅' : '❌'}, Testing: ${pipelineState.codeQuality.testing ? '✅' : '❌'}, Building: ${pipelineState.codeQuality.building ? '✅' : '❌'})`;
 
             const commitSteps = [
                 {
@@ -2465,7 +2465,7 @@
             }
 
             await flowManager.runPipeline([{
-                status: 'Linting passed ✓',
+                status: 'Linting passed ✅',
                 delayTime: 1000
             }]);
 
@@ -2495,7 +2495,7 @@
             }
 
             await flowManager.runPipeline([{
-                status: 'Tests passed ✓',
+                status: 'Tests passed ✅',
                 delayTime: 1000
             }]);
 
@@ -2527,7 +2527,7 @@
             }
 
             await flowManager.runPipeline([{
-                status: 'Build successful ✓',
+                status: 'Build successful ✅',
                 delayTime: 1000
             }]);
 
