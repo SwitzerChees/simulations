@@ -427,7 +427,10 @@
         let activePR = null;
 
         // Create connection lines and action labels
-        const connectionMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+        const connectionMaterials = {
+            inactive: new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2 }),  // Gray for inactive
+            active: new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 })     // Green for active
+        };
         const connections = [];
         const actionLabels = [];
 
@@ -437,7 +440,8 @@
             points.push(start.mesh.position);
             points.push(end.mesh.position);
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(geometry, connectionMaterial);
+            const line = new THREE.Line(geometry, connectionMaterials.inactive);
+            line.userData.originalColor = connectionMaterials.inactive;
             scene.add(line);
             connections.push(line);
 
@@ -447,13 +451,26 @@
             const actionLabel = createTextSprite(actionText, midPoint, 0.7);
             scene.add(actionLabel);
             actionLabels.push(actionLabel);
+
+            return line;
         }
 
         // Create connections between components with action labels
-        createConnection(components.local, components.github, 'git push');
-        createConnection(components.github, components.buildServer, 'PR + CI Trigger');
-        createConnection(components.buildServer, components.test, 'Deploy to Test');
-        createConnection(components.test, components.prod, 'Deploy to Prod');
+        const pathConnections = {
+            gitPush: createConnection(components.local, components.github, 'git push'),
+            prToActions: createConnection(components.github, components.githubActions, 'PR Trigger'),
+            actionsToBuild: createConnection(components.githubActions, components.buildServer, 'CI Jobs'),
+            buildToTest: createConnection(components.buildServer, components.test, 'Deploy to Test'),
+            testToProd: createConnection(components.test, components.prod, 'Deploy to Prod')
+        };
+
+        // Function to update path colors
+        function updatePathColors(completedPaths) {
+            Object.keys(pathConnections).forEach(path => {
+                pathConnections[path].material = completedPaths.includes(path) ? 
+                    connectionMaterials.active : connectionMaterials.inactive;
+            });
+        }
 
         // Status message handler
         function showStatus(message) {
@@ -477,19 +494,21 @@
 
             createParticles() {
                 // Create multiple particles for a trail effect
-                for (let i = 0; i < 5; i++) {
-                    const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                for (let i = 0; i < 10; i++) {  // More particles
+                    const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);  // Bigger particles
                     const material = new THREE.MeshPhongMaterial({
                         color: this.color,
                         transparent: true,
-                        opacity: 0.8
+                        opacity: 0.8,
+                        emissive: this.color,  // Add glow effect
+                        emissiveIntensity: 0.5
                     });
                     const particle = new THREE.Mesh(geometry, material);
                     particle.visible = false;
                     scene.add(particle);
                     this.particles.push({
                         mesh: particle,
-                        offset: i * 0.15 // Spread particles along the path
+                        offset: i * 0.1  // Tighter spacing
                     });
                 }
             }
@@ -680,8 +699,12 @@
                                     0xFFEB3B
                                 );
 
+                                // Reset all paths to inactive
+                                updatePathColors([]);
+                                
                                 // Show PR triggering GitHub Actions
                                 showStatus('PR triggering GitHub Actions...');
+                                updatePathColors(['prToActions']);
                                 flows.prToActions.startFlow(async () => {
                                     // Highlight GitHub Actions
                                     components.githubActions.highlight();
@@ -702,6 +725,7 @@
                                     showStatus('GitHub Actions dispatching jobs to Build Server...');
 
                                     // Show GitHub Actions triggering Build Server
+                                    updatePathColors(['prToActions', 'actionsToBuild']);
                                     flows.actionsToBuilder.startFlow(async () => {
                                         components.buildServer.highlight();
                                         showStatus('Build Server received jobs from GitHub Actions...');
@@ -728,10 +752,12 @@
 
                                 // Deploy to test
                                 showStatus('Build successful! Deploying to Test...');
+                                updatePathColors(['prToActions', 'actionsToBuild', 'buildToTest']);
                                 
                                 // Continue with deployment flow
                                 flows.deployTest.startFlow(() => {
                                     showStatus('Test deployment successful! Deploying to Production...');
+                                    updatePathColors(['prToActions', 'actionsToBuild', 'buildToTest', 'testToProd']);
                                     flows.deployProd.startFlow(() => {
                                         showStatus('Deployment complete! Ready for next changes.');
                                         pipelineState.isProcessing = false;
