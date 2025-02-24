@@ -1236,39 +1236,129 @@
             return group;
         };
 
-        // Create Pull Request component - Merging Code Streams
+        // Create Pull Request component - Branch Tree
         const createPullRequest = (color) => {
             const group = new THREE.Group();
 
-            // Create merge portal (ring)
-            const portalRing = new THREE.Mesh(
-                new THREE.TorusGeometry(0.8, 0.1, 16, 32),
-                new THREE.MeshPhongMaterial({
-                    color: color,
-                    emissive: color,
-                    emissiveIntensity: 0.5,
-                    transparent: true,
-                    opacity: 0.9
-                })
-            );
-            portalRing.rotation.x = Math.PI / 2;
-            group.add(portalRing);
+            // Create branch lines
+            const createBranch = (start, end) => {
+                const points = [];
+                points.push(new THREE.Vector3(start.x, start.y, start.z));
+                points.push(new THREE.Vector3(end.x, end.y, end.z));
 
-            // Create particle systems for code streams
-            const createStream = (startPos, endPos) => {
-                const particleCount = 30;
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.8,
+                    linewidth: 2
+                });
+
+                return new THREE.Line(geometry, material);
+            };
+
+            // Create commit dots
+            const createCommit = (x, y) => {
+                const dot = new THREE.Mesh(
+                    new THREE.CircleGeometry(0.15, 16),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5,
+                        side: THREE.DoubleSide
+                    })
+                );
+                dot.position.set(x, y, 0);
+                return dot;
+            };
+
+            // Main branch (horizontal line)
+            const mainBranch = createBranch(
+                new THREE.Vector3(-2, 0, 0),
+                new THREE.Vector3(2, 0, 0)
+            );
+            group.add(mainBranch);
+
+            // Feature branches
+            const featureBranch1 = createBranch(
+                new THREE.Vector3(-1, 0, 0),
+                new THREE.Vector3(-1.5, 1, 0)
+            );
+            const featureBranch2 = createBranch(
+                new THREE.Vector3(0.5, 0, 0),
+                new THREE.Vector3(1, 1, 0)
+            );
+            group.add(featureBranch1);
+            group.add(featureBranch2);
+
+            // Add commit dots on main branch
+            [-1.5, -1, -0.5, 0, 0.5, 1, 1.5].forEach(x => {
+                group.add(createCommit(x, 0));
+            });
+
+            // Add commit dots on feature branches
+            group.add(createCommit(-1.5, 1)); // Feature branch 1
+            group.add(createCommit(-1.25, 0.5));
+            group.add(createCommit(1, 1));    // Feature branch 2
+            group.add(createCommit(0.75, 0.5));
+
+            // Add merge arrows
+            const createMergeArrow = (start, end) => {
+                const arrowHead = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.1, 0.2, 8),
+                    new THREE.MeshPhongMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                
+                // Calculate arrow rotation
+                const direction = new THREE.Vector3()
+                    .subVectors(end, start)
+                    .normalize();
+                const angle = Math.atan2(direction.y, direction.x);
+                arrowHead.rotation.z = -angle;
+                
+                // Position arrow slightly before end point
+                arrowHead.position.set(
+                    end.x - direction.x * 0.2,
+                    end.y - direction.y * 0.2,
+                    0
+                );
+                
+                return arrowHead;
+            };
+
+            // Add merge arrows
+            group.add(createMergeArrow(
+                new THREE.Vector3(-1.25, 0.5, 0),
+                new THREE.Vector3(-1, 0, 0)
+            ));
+            group.add(createMergeArrow(
+                new THREE.Vector3(0.75, 0.5, 0),
+                new THREE.Vector3(0.5, 0, 0)
+            ));
+
+            // Add flowing particles along merge paths
+            const createParticleFlow = (start, end) => {
+                const particleCount = 5;
                 const positions = new Float32Array(particleCount * 3);
                 const velocities = new Float32Array(particleCount * 3);
                 
                 for (let i = 0; i < particleCount; i++) {
-                    positions[i * 3] = startPos.x + (Math.random() - 0.5) * 0.2;
-                    positions[i * 3 + 1] = startPos.y + (Math.random() - 0.5) * 0.2;
-                    positions[i * 3 + 2] = startPos.z + (Math.random() - 0.5) * 0.2;
+                    positions[i * 3] = start.x;
+                    positions[i * 3 + 1] = start.y;
+                    positions[i * 3 + 2] = 0;
                     
-                    const direction = endPos.clone().sub(startPos).normalize();
-                    velocities[i * 3] = direction.x * 0.05;
-                    velocities[i * 3 + 1] = direction.y * 0.05;
-                    velocities[i * 3 + 2] = direction.z * 0.05;
+                    const direction = new THREE.Vector3()
+                        .subVectors(end, start)
+                        .normalize()
+                        .multiplyScalar(0.03);
+                    
+                    velocities[i * 3] = direction.x;
+                    velocities[i * 3 + 1] = direction.y;
+                    velocities[i * 3 + 2] = 0;
                 }
 
                 const particles = new THREE.Points(
@@ -1277,90 +1367,69 @@
                         color: color,
                         size: 0.05,
                         transparent: true,
-                        opacity: 0.6,
-                        blending: THREE.AdditiveBlending
+                        opacity: 0.6
                     })
                 );
-                
-                particles.geometry.setAttribute('position', 
+
+                particles.geometry.setAttribute('position',
                     new THREE.Float32BufferAttribute(positions, 3));
-                particles.userData.velocities = velocities;
-                particles.userData.startPos = startPos;
-                particles.userData.endPos = endPos;
+                particles.userData = {
+                    velocities,
+                    startPos: start,
+                    endPos: end
+                };
                 
                 return particles;
             };
 
-            // Create two merging streams
-            const stream1 = createStream(
-                new THREE.Vector3(-1.5, 1, 0),  // Start top-left
-                new THREE.Vector3(0, 0, 0)      // Merge center
+            // Create particle flows for both merge paths
+            const flow1 = createParticleFlow(
+                new THREE.Vector3(-1.5, 1, 0),
+                new THREE.Vector3(-1, 0, 0)
             );
-            const stream2 = createStream(
-                new THREE.Vector3(1.5, 1, 0),   // Start top-right
-                new THREE.Vector3(0, 0, 0)      // Merge center
+            const flow2 = createParticleFlow(
+                new THREE.Vector3(1, 1, 0),
+                new THREE.Vector3(0.5, 0, 0)
             );
-            
-            group.add(stream1);
-            group.add(stream2);
-
-            // Add diff visualization planes
-            const diffPlanes = [];
-            for (let i = 0; i < 3; i++) {
-                const plane = new THREE.Mesh(
-                    new THREE.PlaneGeometry(1.2, 0.2),
-                    new THREE.MeshPhongMaterial({
-                        color: i % 2 === 0 ? 0x4CAF50 : 0xFF5252,
-                        transparent: true,
-                        opacity: 0.5,
-                        side: THREE.DoubleSide
-                    })
-                );
-                plane.position.set(0, -0.8 - i * 0.3, 0);
-                plane.rotation.x = Math.PI / 6;
-                group.add(plane);
-                diffPlanes.push(plane);
-            }
+            group.add(flow1);
+            group.add(flow2);
 
             // Add animation update function
             let time = 0;
             group.userData.update = () => {
                 time += 0.02;
 
-                // Animate portal ring
-                portalRing.rotation.z = time;
-                portalRing.material.emissiveIntensity = 0.5 + Math.sin(time * 2) * 0.2;
+                // Pulse commit dots
+                group.children.forEach(child => {
+                    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.CircleGeometry) {
+                        child.material.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.2;
+                    }
+                });
 
-                // Animate particle streams
-                [stream1, stream2].forEach(stream => {
-                    const positions = stream.geometry.attributes.position.array;
-                    const velocities = stream.userData.velocities;
-                    
+                // Update particle flows
+                [flow1, flow2].forEach(flow => {
+                    const positions = flow.geometry.attributes.position.array;
+                    const velocities = flow.userData.velocities;
+                    const startPos = flow.userData.startPos;
+                    const endPos = flow.userData.endPos;
+
                     for (let i = 0; i < positions.length / 3; i++) {
                         positions[i * 3] += velocities[i * 3];
                         positions[i * 3 + 1] += velocities[i * 3 + 1];
-                        positions[i * 3 + 2] += velocities[i * 3 + 2];
-                        
-                        // Reset particle if it reaches the center
-                        const dist = Math.sqrt(
-                            positions[i * 3] * positions[i * 3] +
-                            positions[i * 3 + 1] * positions[i * 3 + 1]
+
+                        const currentPos = new THREE.Vector3(
+                            positions[i * 3],
+                            positions[i * 3 + 1],
+                            positions[i * 3 + 2]
                         );
                         
-                        if (dist < 0.2) {
-                            const startPos = stream.userData.startPos;
-                            positions[i * 3] = startPos.x + (Math.random() - 0.5) * 0.2;
-                            positions[i * 3 + 1] = startPos.y + (Math.random() - 0.5) * 0.2;
-                            positions[i * 3 + 2] = startPos.z + (Math.random() - 0.5) * 0.2;
+                        if (currentPos.distanceTo(endPos) < 0.2) {
+                            positions[i * 3] = startPos.x;
+                            positions[i * 3 + 1] = startPos.y;
                         }
                     }
-                    
-                    stream.geometry.attributes.position.needsUpdate = true;
-                });
 
-                // Animate diff planes
-                diffPlanes.forEach((plane, i) => {
-                    plane.material.opacity = 0.5 + Math.sin(time * 2 + i) * 0.2;
+                    flow.geometry.attributes.position.needsUpdate = true;
                 });
             };
 
