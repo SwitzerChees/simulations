@@ -377,8 +377,48 @@
             return label;
         };
 
+        // Create developer component
+        const createDeveloper = (color) => {
+            const group = new THREE.Group();
+
+            // Developer head
+            const head = new THREE.Mesh(
+                new THREE.SphereGeometry(0.8, 32, 32),
+                createMetalMaterial(color)
+            );
+            head.position.y = 1.2;
+            group.add(head);
+
+            // Developer body
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.8, 2, 8),
+                createMetalMaterial(color)
+            );
+            group.add(body);
+
+            // Developer arms
+            const armGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
+            const leftArm = new THREE.Mesh(armGeometry, createMetalMaterial(color));
+            leftArm.position.set(-0.8, 0.2, 0);
+            leftArm.rotation.z = Math.PI / 4;
+            group.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeometry, createMetalMaterial(color));
+            rightArm.position.set(0.8, 0.2, 0);
+            rightArm.rotation.z = -Math.PI / 4;
+            group.add(rightArm);
+
+            return group;
+        };
+
         // Create components with new layout
         const components = {
+            developer: new Component(
+                createDeveloper,
+                new THREE.Vector3(-20, 0, 0),
+                'Developer',
+                0x9C27B0
+            ),
             local: new Component(
                 createLocalGit,
                 new THREE.Vector3(-16, 0, 0),
@@ -457,11 +497,13 @@
 
         // Create connections between components with action labels
         const pathConnections = {
+            devToLocal: createConnection(components.developer, components.local, 'code'),
             gitPush: createConnection(components.local, components.github, 'git push'),
             prToActions: createConnection(components.github, components.githubActions, 'PR Trigger'),
             actionsToBuild: createConnection(components.githubActions, components.buildServer, 'CI Jobs'),
             buildToTest: createConnection(components.buildServer, components.test, 'Deploy to Test'),
-            testToProd: createConnection(components.test, components.prod, 'Deploy to Prod')
+            testToProd: createConnection(components.test, components.prod, 'Deploy to Prod'),
+            feedbackToDev: createConnection(components.buildServer, components.developer, 'CI Feedback')
         };
 
         // Function to update path colors
@@ -595,11 +637,13 @@
 
         // Create flows
         const flows = {
+            devToLocal: new ParticleFlow(components.developer.mesh.position, components.local.mesh.position),
             gitPush: new ParticleFlow(components.local.mesh.position, components.github.mesh.position),
             prToActions: new ParticleFlow(new THREE.Vector3(-4, 0, 0), new THREE.Vector3(-8, 6, 0), 0xFFC107),  // PR to GitHub Actions
             actionsToBuilder: new ParticleFlow(new THREE.Vector3(-8, 6, 0), new THREE.Vector3(-8, -8, 0), 0xFF9800),  // GitHub Actions to Build Server
             deployTest: new ParticleFlow(components.buildServer.mesh.position, components.test.mesh.position, 0x9C27B0),
-            deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336)
+            deployProd: new ParticleFlow(components.test.mesh.position, components.prod.mesh.position, 0xF44336),
+            feedbackToDev: new ParticleFlow(components.buildServer.mesh.position, components.developer.mesh.position, 0xFF0000)  // Red for failure feedback
         };
 
         const githubActions = new GitHubActions(components.github.mesh.position);
@@ -743,15 +787,35 @@
                                     showStatus(message);
                                     await new Promise(resolve => setTimeout(resolve, delay));
                                     status.visible = false;
+                                    
+                                    // 50% chance of failure
+                                    if (Math.random() < 0.5) {
+                                        throw new Error(`${message} failed!`);
+                                    }
                                 };
 
-                                components.buildServer.highlight();
-                                await runBuildStep(buildStatuses.lint, 'GitHub Actions: Running linter...', 2000);
-                                await runBuildStep(buildStatuses.test, 'GitHub Actions: Running tests...', 2000);
-                                await runBuildStep(buildStatuses.build, 'GitHub Actions: Building...', 2000);
+                                try {
+                                    components.buildServer.highlight();
+                                    await runBuildStep(buildStatuses.lint, 'GitHub Actions: Running linter...', 2000);
+                                    await runBuildStep(buildStatuses.test, 'GitHub Actions: Running tests...', 2000);
+                                    await runBuildStep(buildStatuses.build, 'GitHub Actions: Building...', 2000);
 
-                                // Deploy to test
-                                showStatus('Build successful! Deploying to Test...');
+                                    // Deploy to test
+                                    showStatus('Build successful! Deploying to Test...');
+                                } catch (error) {
+                                    // Show failure feedback
+                                    showStatus(`CI Failed: ${error.message}`);
+                                    components.developer.highlight();
+                                    updatePathColors(['prToActions', 'actionsToBuild', 'feedbackToDev']);
+                                    
+                                    // Send feedback to developer
+                                    flows.feedbackToDev.startFlow(() => {
+                                        showStatus('Feedback sent to developer. Please fix the issues and try again.');
+                                        pipelineState.isProcessing = false;
+                                        pipelineState.canPush = true;
+                                    });
+                                    return;
+                                }
                                 updatePathColors(['prToActions', 'actionsToBuild', 'buildToTest']);
                                 
                                 // Continue with deployment flow
