@@ -162,24 +162,24 @@
                 scene.add(this.label);
             }
 
-            highlight() {
+            highlight(permanent = false) {
                 const highlightColor = new THREE.Color(0x00ff00);
-                const originalColors = new Map();
                 this.mesh.traverse((child) => {
                     if (child.material && child.material.emissive) {
-                        originalColors.set(child, child.material.emissive.clone());
-                        child.material.emissive = highlightColor;
+                        if (!permanent) {
+                            const originalColor = child.material.emissive.clone();
+                            child.material.emissive = highlightColor;
+                            setTimeout(() => {
+                                child.material.emissive = originalColor;
+                            }, 1000);
+                        } else {
+                            child.material.emissive = highlightColor;
+                        }
                     }
                 });
                 
                 // Focus camera on this component
                 focusSystem.focusComponent(this);
-                
-                setTimeout(() => {
-                    originalColors.forEach((color, obj) => {
-                        obj.material.emissive = color;
-                    });
-                }, 1000);
             }
         }
 
@@ -811,9 +811,11 @@
             showStatus('Pushing to GitHub...');
             
             try {
-                // Start particle flow animation
+                // Start particle flow animation and highlight source
+                components.local.highlight();
                 flows.gitPush.startFlow(() => {
-                    // This callback will be called when the flow animation completes
+                    // When flow starts, highlight target
+                    components.github.highlight();
                 });
                 
                 // Simulate network delay
@@ -907,6 +909,12 @@
                                 pipelineState.currentAction = 'pr';
                                 pipelineState.canCreatePR = false;
                                 showStatus('Creating Pull Request...');
+                                components.github.highlight();
+                                
+                                // After a short delay, highlight the target
+                                setTimeout(() => {
+                                    components.githubActions.highlight();
+                                }, 1000);
 
                                 // Create PR visualization
                                 if (activePR) {
