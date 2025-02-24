@@ -970,16 +970,7 @@
                 
                 if (current && current.userData.component) {
                     const component = current.userData.component;
-                    component.highlight();
-
-                    if (component === components.local && pipelineState.canPush && pipelineState.hasLocalChanges) {
-                        handleGitPush();
-                        focusSystem.focusSequence(components.local, components.github);
-                    } 
-                    else if (component === components.github && pipelineState.canCreatePR) {
-                        handlePRCreation();
-                        focusSystem.focusSequence(components.github, components.githubActions);
-                    }
+                    focusSystem.focusComponent(component);
                 }
             }
 
