@@ -149,6 +149,24 @@
                 this.mesh.position.copy(position);
                 this.name = name;
                 this.mesh.userData.component = this;
+
+                // Add invisible bounding box for larger hit area
+                const boundingBox = new THREE.Box3().setFromObject(group);
+                const size = boundingBox.getSize(new THREE.Vector3());
+                const boxGeometry = new THREE.BoxGeometry(
+                    size.x * 3, // Triple the size for bigger hitbox
+                    size.y * 3,
+                    size.z * 3
+                );
+                const boxMaterial = new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.BackSide
+                });
+                this.hitbox = new THREE.Mesh(boxGeometry, boxMaterial);
+                this.hitbox.userData.rootComponent = this;
+                group.add(this.hitbox);
+
                 // Add component reference to all child meshes
                 this.mesh.traverse((child) => {
                     child.userData.rootComponent = this;
@@ -162,8 +180,8 @@
                 scene.add(this.label);
             }
 
-            highlight(permanent = false) {
-                const highlightColor = new THREE.Color(0x00ff00);
+            highlight(permanent = false, color = 0x00ff00) {
+                const highlightColor = new THREE.Color(color);
                 this.mesh.traverse((child) => {
                     if (child.material && child.material.emissive) {
                         if (!permanent) {
@@ -177,9 +195,6 @@
                         }
                     }
                 });
-                
-                // Focus camera on this component
-                focusSystem.focusComponent(this);
             }
         }
 
@@ -942,9 +957,58 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Handle component clicking
+        // Handle component clicking and hovering
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+        let hoveredComponent = null;
+
+        // Mouse move handler for hover effect
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const allMeshes = [];
+            scene.traverse((object) => {
+                if (object.isMesh) {
+                    allMeshes.push(object);
+                }
+            });
+            const intersects = raycaster.intersectObjects(allMeshes);
+
+            let foundComponent = null;
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                let current = object;
+                while (current && !current.userData.rootComponent) {
+                    current = current.parent;
+                }
+                if (current && current.userData.rootComponent) {
+                    foundComponent = current.userData.rootComponent;
+                }
+            }
+
+            // Update hover highlighting
+            if (foundComponent !== hoveredComponent) {
+                // Remove highlight from previously hovered component
+                if (hoveredComponent) {
+                    hoveredComponent.mesh.traverse((child) => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissive.setHex(0x000000);
+                        }
+                    });
+                }
+                // Add highlight to newly hovered component
+                if (foundComponent) {
+                    foundComponent.mesh.traverse((child) => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissive.setHex(0x444444);
+                        }
+                    });
+                }
+                hoveredComponent = foundComponent;
+            }
+        });
 
         window.addEventListener('click', async (event) => { 
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -968,8 +1032,9 @@
                     current = current.parent;
                 }
                 
-                if (current && current.userData.component) {
-                    const component = current.userData.component;
+                if (current && current.userData.rootComponent) {
+                    const component = current.userData.rootComponent;
+                    component.highlight();
                     focusSystem.focusComponent(component);
                 }
             }
