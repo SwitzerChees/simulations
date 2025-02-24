@@ -2298,26 +2298,24 @@
             button.className = 'px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium transition-colors';
             button.textContent = component.name;
             button.onclick = () => {
-                if (!pipelineState.isProcessing) {
-                    // Remove highlight from all components
-                    Object.values(components).forEach(c => {
-                        c.mesh.traverse((child) => {
-                            if (child.material && child.material.emissive) {
-                                child.material.emissive.setHex(0x000000);
-                            }
-                        });
-                    });
-                    
-                    // Highlight selected component
-                    component.mesh.traverse((child) => {
+                // Remove highlight from all components
+                Object.values(components).forEach(c => {
+                    c.mesh.traverse((child) => {
                         if (child.material && child.material.emissive) {
-                            child.material.emissive.setHex(0x444444);
+                            child.material.emissive.setHex(0x000000);
                         }
                     });
-                    
-                    focusSystem.focusComponent(component);
-                    animate();
-                }
+                });
+                
+                // Highlight selected component
+                component.mesh.traverse((child) => {
+                    if (child.material && child.material.emissive) {
+                        child.material.emissive.setHex(0x444444);
+                    }
+                });
+                
+                focusSystem.focusComponent(component);
+                animate();
             };
             selectorContainer.appendChild(button);
         });
