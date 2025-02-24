@@ -2042,6 +2042,7 @@
                     canCommit: true,
                     hasLocalChanges: false,
                     currentAction: null,
+                    prFailed: false,
                     codeQuality: {
                         linting: true,
                         testing: true,
@@ -2192,6 +2193,10 @@
         let simulateFailure = false; // Control whether the pipeline should fail
 
         const handlePRCreation = async () => {
+            if (!pipelineState.canCreatePR) {
+                showStatus('Cannot create PR: Waiting for previous process to complete');
+                return;
+            }
             pipelineState.currentAction = 'pr';
             pipelineState.canCreatePR = false;
             updatePathColors(['prToActions']);
@@ -2249,6 +2254,7 @@
             ]);
             
             if (!pipelineState.codeQuality.linting) {
+                pipelineState.prFailed = true; // Set failed flag for lint failure
                 await flowManager.runPipeline([
                     {
                         status: 'Linting failed! ❌ Check code style and formatting.',
@@ -2263,7 +2269,7 @@
                         delayTime: 2000
                     }
                 ]);
-                showStatus('Pipeline failed at linting stage');
+                showStatus('Pipeline failed at linting stage - Will retry after next push');
                 return;
             }
 
@@ -2280,6 +2286,7 @@
             }]);
             
             if (!pipelineState.codeQuality.testing) {
+                pipelineState.prFailed = true; // Set failed flag for test failure
                 await flowManager.runPipeline([
                     {
                         status: 'Tests failed! ❌ Fix failing tests.',
@@ -2292,7 +2299,7 @@
                         delayTime: 2000
                     }
                 ]);
-                showStatus('Pipeline failed at testing stage');
+                showStatus('Pipeline failed at testing stage - Will retry after next push');
                 return;
             }
 
@@ -2309,6 +2316,7 @@
             }]);
             
             if (!pipelineState.codeQuality.building) {
+                pipelineState.prFailed = true; // Set failed flag for build failure
                 await flowManager.runPipeline([
                     {
                         status: 'Build failed! ❌ Fix build errors.',
@@ -2323,7 +2331,7 @@
                         delayTime: 2000
                     }
                 ]);
-                showStatus('Pipeline failed at build stage');
+                showStatus('Pipeline failed at build stage - Will retry after next push');
                 return;
             }
 
@@ -2359,8 +2367,9 @@
                 ]);
             } catch (error) {
                 console.error('Error in PR creation:', error);
+                pipelineState.prFailed = true;
                 await flowManager.runPipeline([{
-                    status: 'Sending feedback to developer...',
+                    status: 'PR Creation failed - will retry after next push...',
                     flow: flows.buildToDev,
                     targetComponent: components.developer,
                     delayTime: 2000
@@ -2374,6 +2383,10 @@
         // Git push handler
         const handleGitPush = async () => {
             pipelineState.currentAction = 'push';
+            if (pipelineState.prFailed) {
+                showStatus('Previous PR failed - restarting workflow after push...');
+                components.github.highlight();
+            }
             updatePathColors(['gitPush']);
 
             const pushSteps = [
@@ -2386,10 +2399,32 @@
                 {
                     status: 'Changes pushed to GitHub',
                     delayTime: 1000,
-                    action: () => {
+                    action: async () => {
                         pipelineState.canPush = false;
-                        pipelineState.canCreatePR = true;
                         pipelineState.hasLocalChanges = false;
+
+                        
+                        if (pipelineState.prFailed) {
+                            showStatus('Push complete. Preparing to restart PR creation...');
+                            
+                            // Ensure clean state before PR creation
+                            pipelineState.isProcessing = false;
+                            await utils.delay(100);
+                            pipelineState.canCreatePR = true;
+                            await utils.delay(100);
+                            
+                            showStatus('Automatically restarting PR creation...');
+                            try {
+                                await handlePRCreation();
+                                pipelineState.prFailed = false;
+                            } catch (error) {
+                                console.error('Error auto-triggering PR:', error);
+                                showStatus('Failed to auto-trigger PR. Please try manually.');
+                            }
+                        } else {
+                            pipelineState.isProcessing = false;
+                            pipelineState.canCreatePR = true;
+                        }
                     }
                 }
             ];
