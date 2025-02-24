@@ -118,6 +118,19 @@
             }
         };
         
+        // Helper function to clear all highlights
+        const clearAllHighlights = () => {
+            Object.values(components).forEach(component => {
+                if (component && component.mesh) {
+                    component.mesh.traverse((child) => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissive.setHex(0x000000);
+                        }
+                    });
+                }
+            });
+        };
+
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
@@ -855,13 +868,12 @@
                 pipelineState.isProcessing = true;
                 pipelineState.currentAction = 'pr';
                 pipelineState.canCreatePR = false;
-                showStatus('Creating Pull Request...');
-                components.github.highlight();
                 
-                // After a short delay, highlight the target
-                setTimeout(() => {
-                    components.githubActions.highlight();
-                }, 1000);
+                // Step 1: Create Pull Request
+                showStatus('Creating Pull Request...');
+                clearAllHighlights();
+                components.github.highlight();
+                await new Promise(resolve => setTimeout(resolve, 2000));
 
                 // Create PR visualization
                 if (activePR) {
@@ -875,42 +887,44 @@
                     0xFFEB3B
                 );
 
-                // Reset all paths to inactive
-                updatePathColors([]);
-                
-                // Show PR triggering GitHub Actions
+                // Step 2: Trigger GitHub Actions
+                clearAllHighlights();
+                components.githubActions.highlight();
+                focusSystem.focusComponent(components.githubActions);
                 showStatus('PR triggering GitHub Actions...');
                 updatePathColors(['prToActions']);
-                flows.prToActions.startFlow(async () => {
-                    // Highlight GitHub Actions
-                    components.githubActions.highlight();
-                    showStatus('GitHub Actions detected new PR...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Step 3: Run Build Steps
+                clearAllHighlights();
+                components.buildServer.highlight();
+                focusSystem.focusComponent(components.buildServer);
+                updatePathColors(['actionsToBuild']);
+                
+                try {
+                    await runBuildStep(buildStatuses.lint, 'GitHub Actions: Running linter...', 2000);
+                    await runBuildStep(buildStatuses.test, 'GitHub Actions: Running tests...', 2000);
+                    await runBuildStep(buildStatuses.build, 'GitHub Actions: Building...', 2000);
                     
-                    try {
-                        components.buildServer.highlight();
-                        await runBuildStep(buildStatuses.lint, 'GitHub Actions: Running linter...', 2000);
-                        await runBuildStep(buildStatuses.test, 'GitHub Actions: Running tests...', 2000);
-                        await runBuildStep(buildStatuses.build, 'GitHub Actions: Building...', 2000);
-                        
-                        // Show success and enable deployment
-                        showStatus('CI pipeline passed! PR ready for review.');
-                        pipelineState.isProcessing = false;
-                    } catch (error) {
-                        // Show failure feedback
-                        showStatus(`CI Failed: ${error.message}`);
-                        components.developer.highlight();
-                        updatePathColors(['prToActions', 'actionsToBuild', 'feedbackToDev']);
-                        
-                        // Reset state
-                        pipelineState.isProcessing = false;
-                        pipelineState.canCreatePR = true;
-                    }
-                });
+                    // Show success
+                    showStatus('CI pipeline passed! PR ready for review.');
+                    pipelineState.isProcessing = false;
+                } catch (error) {
+                    // Show failure feedback
+                    showStatus(`CI Failed: ${error.message}`);
+                    clearAllHighlights();
+                    components.developer.highlight();
+                    focusSystem.focusComponent(components.developer);
+                    updatePathColors(['prToActions', 'actionsToBuild', 'feedbackToDev']);
+                    pipelineState.isProcessing = false;
+                }
             } catch (error) {
-                console.error('Error in PR creation process:', error);
-                showStatus('Error in pipeline. Please try again.');
+                console.error('Error in PR creation:', error);
+                showStatus('Error creating PR');
+                clearAllHighlights();
+                components.github.highlight();
                 pipelineState.isProcessing = false;
-                pipelineState.canPush = true;
+                pipelineState.canCreatePR = true;
             }
         };
 
