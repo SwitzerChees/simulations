@@ -154,9 +154,9 @@
                 const boundingBox = new THREE.Box3().setFromObject(group);
                 const size = boundingBox.getSize(new THREE.Vector3());
                 const boxGeometry = new THREE.BoxGeometry(
-                    size.x * 3, // Triple the size for bigger hitbox
-                    size.y * 3,
-                    size.z * 3
+                    size.x * 1.75, // 1.75x size for balanced hitbox
+                    size.y * 1.75,
+                    size.z * 1.75
                 );
                 const boxMaterial = new THREE.MeshBasicMaterial({
                     transparent: true,
@@ -465,7 +465,7 @@
         const components = {
             developer: new Component(
                 createDeveloper,
-                new THREE.Vector3(-20, 0, 0),
+                new THREE.Vector3(-24, 0, 0),
                 'Developer',
                 0x9C27B0
             ),
