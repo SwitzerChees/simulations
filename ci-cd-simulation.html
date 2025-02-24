@@ -1027,7 +1027,6 @@
             
             // Only trigger if mouseup is on the same component as mousedown
             if (mouseUpComponent && mouseUpComponent === mouseDownComponent && !pipelineState.isProcessing) {
-                mouseUpComponent.highlight();
                 focusSystem.focusComponent(mouseUpComponent);
                 animate();
             }
