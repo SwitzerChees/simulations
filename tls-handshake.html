@@ -311,7 +311,8 @@
             let completedMessages = [];
             
             messages.forEach(message => {
-                message.progress += 0.01;
+                // Slow down the animation speed significantly
+                message.progress += 0.002; // Reduced from 0.01 to 0.002 (5x slower)
                 
                 if (message.direction === "client-to-server") {
                     const startX = clientMesh.position.x + 1;
@@ -370,7 +371,7 @@
                     setTimeout(() => {
                         const newMessage = createMessage(handshakeStage);
                         messages.push(newMessage);
-                    }, 500);
+                    }, 2000); // Increased from 500ms to 2000ms (4x longer pause between steps)
                 }
             });
         }
