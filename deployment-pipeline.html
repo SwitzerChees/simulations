@@ -70,7 +70,8 @@
         <!-- Test Environment with Kubernetes -->
         <div id="test-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 50px;">
             <h3 class="text-lg font-bold mb-2">Testing Environment</h3>
-            <p class="text-sm mb-4">Kubernetes Test Cluster</p>
+            <p class="text-sm mb-1">Kubernetes Test Cluster</p>
+            <p class="text-xs mb-4 text-yellow-600 version-label">No version deployed</p>
             
             <!-- Kubernetes Test Cluster -->
             <div class="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300 transition-all duration-300">
@@ -92,7 +93,8 @@
         <!-- Production Environment with Kubernetes -->
         <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 400px; left: 900px; top: 50px;">
             <h3 class="text-lg font-bold mb-2">Production Environment</h3>
-            <p class="text-sm mb-4">Kubernetes Production Cluster</p>
+            <p class="text-sm mb-1">Kubernetes Production Cluster</p>
+            <p class="text-xs mb-4 text-green-600 version-label">No version deployed</p>
             
             <!-- Kubernetes Production Cluster -->
             <div class="bg-green-50 p-4 rounded-lg border-2 border-green-300 transition-all duration-300">
@@ -283,6 +285,11 @@
         function deployToKubernetes(stage, onComplete) {
             const container = createContainerImage();
             document.querySelector('.relative').appendChild(container);
+            
+            // Update version label
+            const targetStage = stage === 'test' ? testStage : prodStage;
+            const versionLabel = targetStage.querySelector('.version-label');
+            versionLabel.textContent = 'Deploying ' + window.currentVersion + '...';
 
             // Move to registry first
             const registry = document.querySelector('.bg-purple-100');
@@ -323,6 +330,12 @@
                         podIndex++;
                     });
                 });
+                
+                // Update version label after deployment
+                setTimeout(() => {
+                    const versionLabel = targetStage.querySelector('.version-label');
+                    versionLabel.textContent = 'Running ' + window.currentVersion;
+                }, podIndex * 200);
 
                 // Remove original container
                 setTimeout(() => {
@@ -339,6 +352,11 @@
             }
             
             codePackage = null;
+            
+            // Reset version labels
+            document.querySelectorAll('.version-label').forEach(label => {
+                label.textContent = 'No version deployed';
+            });
             if (resetRunningState) {
                 isRunning = false;
             }
@@ -471,8 +489,39 @@
                     showStepLabel(gate1, 'All checks passed!', 10);
                     
                     setTimeout(() => {
-                        // Move to test stage
-                        movePackageTo(testStage, enterTestStage);
+                        // Create artifact container
+                        const artifact = createContainerImage();
+                        document.querySelector('.relative').appendChild(artifact);
+                        
+                        // Position at gate1
+                        const gate1Rect = gate1.getBoundingClientRect();
+                        artifact.style.left = (gate1Rect.left + window.scrollX) + 'px';
+                        artifact.style.top = (gate1Rect.top + window.scrollY) + 'px';
+                        
+                        // Move to registry
+                        const registry = document.querySelector('.bg-purple-100');
+                        setTimeout(() => {
+                            artifact.style.left = (registry.offsetLeft + registry.offsetWidth/2 - 15) + 'px';
+                            artifact.style.top = (registry.offsetTop + 20) + 'px';
+                            
+                            // Add new item to registry
+                            setTimeout(() => {
+                                const newVersion = document.createElement('div');
+                                newVersion.className = 'bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50';
+                                const version = 'nodejs-app:' + new Date().toISOString().slice(11,19);
+                                newVersion.textContent = version;
+                                window.currentVersion = version;
+                                registry.querySelector('.space-y-1').insertBefore(newVersion, registry.querySelector('.space-y-1').firstChild);
+                                
+                                // Scale down and remove artifact
+                                artifact.style.transform = 'scale(0.5)';
+                                setTimeout(() => {
+                                    artifact.remove();
+                                    // Move to test stage
+                                    movePackageTo(testStage, enterTestStage);
+                                }, 500);
+                            }, 500);
+                        }, 500);
                     }, 1000);
                 } else {
                     gate1.classList.remove('bg-yellow-500');
