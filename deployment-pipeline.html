@@ -79,10 +79,12 @@
                     <h4 class="text-sm font-bold">Node 1</h4>
                     <div class="flex gap-2 mt-2">
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            Node.js Pod
+                            <div>Node.js Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            DB Pod
+                            <div>DB Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                     </div>
                 </div>
@@ -91,7 +93,7 @@
         </div>
         
         <!-- Production Environment with Kubernetes -->
-        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 450px; left: 900px; top: 50px;">
+        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 480px; left: 900px; top: 50px;">
             <h3 class="text-lg font-bold mb-2">Production Environment</h3>
             <p class="text-sm mb-1">Kubernetes Production Cluster</p>
             <p class="text-xs mb-4 text-green-600 version-label">No version deployed</p>
@@ -102,10 +104,12 @@
                     <h4 class="text-sm font-bold">Node 1</h4>
                     <div class="flex gap-2 mt-2">
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            Node.js Pod
+                            <div>Node.js Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            DB Pod
+                            <div>DB Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                     </div>
                 </div>
@@ -113,10 +117,12 @@
                     <h4 class="text-sm font-bold">Node 2</h4>
                     <div class="flex gap-2 mt-2">
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            Node.js Pod
+                            <div>Node.js Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            DB Pod
+                            <div>DB Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                     </div>
                 </div>
@@ -124,10 +130,12 @@
                     <h4 class="text-sm font-bold">Node 3</h4>
                     <div class="flex gap-2 mt-2">
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            Node.js Pod
+                            <div>Node.js Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
-                            DB Pod
+                            <div>DB Pod</div>
+                            <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                         </div>
                     </div>
                 </div>
@@ -318,15 +326,65 @@
                             newContainer.style.top = (rect.top + window.scrollY) + 'px';
                             newContainer.style.transform = 'scale(0.5)';
 
+                            const delay = Math.random() * 1000 + 500; // Random delay between 500-1500ms
                             setTimeout(() => {
-                                pod.classList.remove('opacity-0');
-                                pod.classList.remove('bg-white');
-                                pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200', 'scale-110');
-                                setTimeout(() => {
-                                    pod.classList.remove('scale-110');
-                                    newContainer.remove();
-                                }, 300);
-                            }, 500);
+                                // Only proceed with pod update if it's not already the current version
+                                if (pod.querySelector('.pod-version')?.textContent !== window.currentVersion) {
+                                    const rect = pod.getBoundingClientRect();
+                                    const newPod = document.createElement('div');
+                                    newPod.className = `p-2 rounded text-xs transition-all duration-300 hover:scale-105 ${index === 0 ? 'bg-blue-200' : 'bg-orange-200'}`;
+                                    
+                                    // Copy pod content with new version
+                                    const podContent = document.createElement('div');
+                                    podContent.textContent = pod.querySelector('div:first-child').textContent;
+                                    const versionLabel = document.createElement('div');
+                                    versionLabel.className = 'text-[10px] mt-1 text-gray-500 pod-version';
+                                    versionLabel.textContent = window.currentVersion;
+                                    newPod.appendChild(podContent);
+                                    newPod.appendChild(versionLabel);
+                                    newPod.style.position = 'absolute';
+                                    newPod.style.left = (rect.left + window.scrollX + 20) + 'px';
+                                    newPod.style.top = (rect.top + window.scrollY) + 'px';
+                                    newPod.style.opacity = '0';
+                                    document.querySelector('.relative').appendChild(newPod);
+                                    
+                                    // Fade in new pod
+                                    setTimeout(() => {
+                                        newPod.style.opacity = '1';
+                                        newPod.style.left = (rect.left + window.scrollX) + 'px';
+                                        
+                                        // If pod is already visible, animate replacement
+                                        if (!pod.classList.contains('opacity-0')) {
+                                            const oldPod = pod.cloneNode(true);
+                                            oldPod.style.position = 'absolute';
+                                            oldPod.style.left = (rect.left + window.scrollX) + 'px';
+                                            oldPod.style.top = (rect.top + window.scrollY) + 'px';
+                                            document.querySelector('.relative').appendChild(oldPod);
+                                            
+                                            setTimeout(() => {
+                                                oldPod.style.left = (rect.left + window.scrollX - 20) + 'px';
+                                                oldPod.style.opacity = '0';
+                                                setTimeout(() => oldPod.remove(), 300);
+                                            }, 100);
+                                        }
+                                        
+                                        // Update the pod in place
+                                        pod.classList.remove('opacity-0', 'bg-white');
+                                        pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200');
+                                        pod.querySelector('.pod-version').textContent = window.currentVersion;
+                                        
+                                        // Clean up the temporary new pod
+                                        setTimeout(() => {
+                                            newPod.remove();
+                                        }, 500);
+                                    }, 100);
+                                }
+                            }, delay);
+                            
+                            setTimeout(() => {
+                                pod.classList.remove('scale-110');
+                                newContainer.remove();
+                            }, Math.max(delay + 1000, 300));
                         }, podIndex * 200);
                         podIndex++;
                     });
@@ -347,23 +405,25 @@
         }
         
         // Reset the deployment
-        function resetDeployment(resetRunningState = true) {
+        function resetDeployment(resetRunningState) {
+            resetRunningState = resetRunningState === undefined ? true : resetRunningState;
             if (codePackage && codePackage.parentNode) {
                 codePackage.parentNode.removeChild(codePackage);
             }
             
             codePackage = null;
             
-            // Reset version labels and hide pods
-            document.querySelectorAll('.version-label').forEach(label => {
-                label.textContent = 'No version deployed';
-            });
-            
-            // Hide all pods and reset their state
-            document.querySelectorAll('.p-2.rounded.text-xs').forEach(pod => {
-                pod.classList.remove('bg-blue-200', 'bg-orange-200', 'scale-110');
-                pod.classList.add('bg-white', 'opacity-0');
-            });
+            // Only reset if no deployment is active
+            if (!window.currentVersion) {
+                document.querySelectorAll('.version-label').forEach(label => {
+                    label.textContent = 'No version deployed';
+                });
+                
+                document.querySelectorAll('.p-2.rounded.text-xs').forEach(pod => {
+                    pod.classList.remove('bg-blue-200', 'bg-orange-200', 'scale-110');
+                    pod.classList.add('bg-white', 'opacity-0');
+                });
+            }
             if (resetRunningState) {
                 isRunning = false;
             }
