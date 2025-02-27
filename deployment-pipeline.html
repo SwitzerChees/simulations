@@ -73,14 +73,14 @@
 <body class="bg-gray-100">
     <div class="relative w-full h-screen">
         <!-- Stages -->
-        <div id="dev-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 50px;">
+        <div id="dev-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 30px;">
             <h3 class="text-lg font-bold mb-2">Development</h3>
             <p class="text-sm">Code is written and unit tested</p>
             <div class="status-indicator absolute w-4 h-4 rounded-full right-3 top-3 bg-gray-300"></div>
         </div>
         
         <!-- Test Environment with Kubernetes -->
-        <div id="test-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 50px;">
+        <div id="test-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 30px;">
             <h3 class="text-lg font-bold mb-2">Testing Environment</h3>
             <p class="text-sm mb-1">Kubernetes Test Cluster</p>
             <p class="text-xs mb-4 text-yellow-600 version-label">No version deployed</p>
@@ -111,7 +111,7 @@
         </div>
         
         <!-- Production Environment with Kubernetes -->
-        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 520px; left: 900px; top: 50px;">
+        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 520px; left: 900px; top: 30px;">
             <h3 class="text-lg font-bold mb-2">Production Environment</h3>
             <p class="text-sm mb-1">Kubernetes Production Cluster</p>
             <p class="text-xs mb-4 text-green-600 version-label">No version deployed</p>
@@ -233,7 +233,7 @@
         </div>
         
         <!-- Legend -->
-        <div class="absolute top-5 right-5 bg-white/90 rounded-lg p-4 shadow-md">
+        <div class="absolute top-8 right-5 bg-white/90 rounded-lg p-4 shadow-md">
             <h4 class="font-bold mb-2">Legend</h4>
             <div class="flex items-center mb-2">
                 <div class="w-4 h-4 mr-3 rounded bg-blue-500"></div>
