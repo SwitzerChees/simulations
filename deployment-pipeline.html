@@ -78,10 +78,10 @@
                 <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 1</h4>
                     <div class="flex gap-2 mt-2">
-                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             Node.js Pod
                         </div>
-                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             DB Pod
                         </div>
                     </div>
@@ -91,7 +91,7 @@
         </div>
         
         <!-- Production Environment with Kubernetes -->
-        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 400px; left: 900px; top: 50px;">
+        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 450px; left: 900px; top: 50px;">
             <h3 class="text-lg font-bold mb-2">Production Environment</h3>
             <p class="text-sm mb-1">Kubernetes Production Cluster</p>
             <p class="text-xs mb-4 text-green-600 version-label">No version deployed</p>
@@ -101,10 +101,10 @@
                 <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 1</h4>
                     <div class="flex gap-2 mt-2">
-                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             Node.js Pod
                         </div>
-                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             DB Pod
                         </div>
                     </div>
@@ -112,10 +112,10 @@
                 <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 2</h4>
                     <div class="flex gap-2 mt-2">
-                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             Node.js Pod
                         </div>
-                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             DB Pod
                         </div>
                     </div>
@@ -123,10 +123,10 @@
                 <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 3</h4>
                     <div class="flex gap-2 mt-2">
-                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             Node.js Pod
                         </div>
-                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                        <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             DB Pod
                         </div>
                     </div>
@@ -319,6 +319,7 @@
                             newContainer.style.transform = 'scale(0.5)';
 
                             setTimeout(() => {
+                                pod.classList.remove('opacity-0');
                                 pod.classList.remove('bg-white');
                                 pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200', 'scale-110');
                                 setTimeout(() => {
@@ -353,9 +354,15 @@
             
             codePackage = null;
             
-            // Reset version labels
+            // Reset version labels and hide pods
             document.querySelectorAll('.version-label').forEach(label => {
                 label.textContent = 'No version deployed';
+            });
+            
+            // Hide all pods and reset their state
+            document.querySelectorAll('.p-2.rounded.text-xs').forEach(pod => {
+                pod.classList.remove('bg-blue-200', 'bg-orange-200', 'scale-110');
+                pod.classList.add('bg-white', 'opacity-0');
             });
             if (resetRunningState) {
                 isRunning = false;
