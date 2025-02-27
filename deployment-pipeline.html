@@ -202,7 +202,7 @@
         </div>
         
         <!-- Gate Popups -->
-        <div id="gate1-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 350px; top: 150px;">
+        <div id="gate1-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 325px; top: 120px;">
             <h4 class="font-bold text-gray-800 mb-2">Quality Gate 1</h4>
             <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
                 <li>Code review</li>
@@ -212,7 +212,7 @@
             </ul>
         </div>
         
-        <div id="gate2-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 825px; top: 150px;">
+        <div id="gate2-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 825px; top: 120px;">
             <h4 class="font-bold text-gray-800 mb-2">Quality Gate 2</h4>
             <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
                 <li>Integration tests pass</li>
@@ -623,13 +623,8 @@
             label.setAttribute('data-step-label', '');
             label.textContent = text;
             
-            // Calculate position below the stage boxes
-            const nearestStage = gate.id === 'gate1' ? 
-                document.getElementById('test-stage') : 
-                document.getElementById('prod-stage');
-            
-            const stageBottom = nearestStage.offsetTop + nearestStage.offsetHeight;
-            label.style.top = (stageBottom + 20 + top) + 'px';
+            // Calculate position below the gate
+            label.style.top = (gate.offsetTop + gate.offsetHeight + 20 + top) + 'px';
             document.querySelector('.relative').appendChild(label);
             label.style.left = (gate.offsetLeft + gate.offsetWidth/2) + 'px';
             
@@ -670,7 +665,7 @@
 
             steps.forEach((step, index) => {
                 setTimeout(() => {
-                    showStepLabel(gate1, step.text, index * 25);
+                    showStepLabel(gate1, step.text, index * 40); // Increased spacing between step labels
                 }, step.delay);
             });
             
@@ -800,7 +795,7 @@
 
             steps.forEach((step, index) => {
                 setTimeout(() => {
-                    showStepLabel(gate2, step.text, index * 25);
+                    showStepLabel(gate2, step.text, index * 40); // Increased spacing between step labels
                 }, step.delay);
             });
             
