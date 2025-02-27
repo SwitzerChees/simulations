@@ -68,6 +68,57 @@
             border-radius: 5px;
             transition: all 0.5s ease;
             z-index: 3;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .pod {
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .pod::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border: 2px solid transparent;
+            border-radius: 7px;
+            transition: all 0.3s ease;
+        }
+
+        .pod.active::before {
+            border-color: #10b981;
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .k8s-cluster {
+            transition: all 0.3s ease;
+        }
+
+        .node {
+            transition: all 0.3s ease;
+        }
+
+        .container-registry {
+            transition: all 0.3s ease;
+        }
+
+        .container-registry .image {
+            transition: all 0.3s ease;
+        }
+
+        .container-registry .image:hover {
+            transform: translateX(5px);
+            background-color: #f3f4f6;
         }
         .status-indicator {
             position: absolute;
@@ -124,35 +175,88 @@
 <body class="bg-gray-100">
     <div class="container">
         <!-- Stages -->
-        <div id="dev-stage" class="stage bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 150px;">
+        <div id="dev-stage" class="stage bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 50px;">
             <h3 class="text-lg">Development</h3>
             <p class="text-sm">Code is written and unit tested</p>
             <div class="status-indicator bg-gray-300"></div>
         </div>
         
-        <div id="test-stage" class="stage bg-yellow-100 text-yellow-800" style="width: 200px; height: 150px; left: 450px; top: 150px;">
-            <h3 class="text-lg">Testing</h3>
-            <p class="text-sm">Integration and system testing</p>
+        <!-- Test Environment with Kubernetes -->
+        <div id="test-stage" class="stage bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 50px;">
+            <h3 class="text-lg">Testing Environment</h3>
+            <p class="text-sm mb-4">Kubernetes Test Cluster</p>
+            
+            <!-- Kubernetes Test Cluster -->
+            <div class="k8s-cluster bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300">
+                <div class="node bg-white p-2 rounded mb-2 shadow">
+                    <h4 class="text-sm font-bold">Node 1</h4>
+                    <div class="pods flex gap-2 mt-2">
+                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                            Node.js Pod
+                        </div>
+                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                            DB Pod
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="status-indicator bg-gray-300"></div>
         </div>
         
-        <div id="prod-stage" class="stage bg-green-100 text-green-800" style="width: 200px; height: 150px; left: 800px; top: 150px;">
-            <h3 class="text-lg">Production</h3>
-            <p class="text-sm">Live environment</p>
+        <!-- Production Environment with Kubernetes -->
+        <div id="prod-stage" class="stage bg-green-100 text-green-800" style="width: 400px; height: 300px; left: 900px; top: 50px;">
+            <h3 class="text-lg">Production Environment</h3>
+            <p class="text-sm mb-4">Kubernetes Production Cluster</p>
+            
+            <!-- Kubernetes Production Cluster -->
+            <div class="k8s-cluster bg-green-50 p-4 rounded-lg border-2 border-green-300">
+                <div class="node bg-white p-2 rounded mb-2 shadow">
+                    <h4 class="text-sm font-bold">Node 1</h4>
+                    <div class="pods flex gap-2 mt-2">
+                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                            Node.js Pod
+                        </div>
+                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                            DB Pod
+                        </div>
+                    </div>
+                </div>
+                <div class="node bg-white p-2 rounded mb-2 shadow">
+                    <h4 class="text-sm font-bold">Node 2</h4>
+                    <div class="pods flex gap-2 mt-2">
+                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                            Node.js Pod
+                        </div>
+                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                            DB Pod
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="status-indicator bg-gray-300"></div>
         </div>
         
         <!-- Pipelines -->
-        <div class="pipeline" style="width: 150px; left: 300px; top: 225px;"></div>
-        <div class="pipeline" style="width: 150px; left: 650px; top: 225px;"></div>
+        <div class="pipeline" style="width: 100px; left: 300px; top: 125px;"></div>
+        <div class="pipeline" style="width: 100px; left: 800px; top: 125px;"></div>
         
         <!-- Quality Gates -->
-        <div id="gate1" class="gate" style="width: 50px; height: 50px; left: 375px; top: 200px;">
+        <div id="gate1" class="gate" style="width: 50px; height: 50px; left: 325px; top: 100px;">
             QG1
         </div>
         
-        <div id="gate2" class="gate" style="width: 50px; height: 50px; left: 725px; top: 200px;">
+        <div id="gate2" class="gate" style="width: 50px; height: 50px; left: 825px; top: 100px;">
             QG2
+        </div>
+        
+        <!-- Container Registry -->
+        <div class="container-registry bg-purple-100 text-purple-800 p-4 rounded-lg border-2 border-purple-300" 
+             style="position: absolute; width: 150px; left: 525px; top: 400px;">
+            <h4 class="text-sm font-bold">Container Registry</h4>
+            <div class="images mt-2 text-xs">
+                <div class="image bg-white p-2 rounded mb-1">nodejs-app:latest</div>
+                <div class="image bg-white p-2 rounded">database:latest</div>
+            </div>
         </div>
         
         <!-- Gate Popups -->
@@ -266,6 +370,62 @@
             updateStageStatus(devStage, 'processing');
             simulateDevelopment();
         }
+
+        // Create container image
+        function createContainerImage() {
+            const image = document.createElement('div');
+            image.className = 'code-package';
+            image.style.backgroundColor = '#818cf8'; // Indigo-400
+            return image;
+        }
+
+        // Deploy containers to Kubernetes
+        function deployToKubernetes(stage, onComplete) {
+            const container = createContainerImage();
+            document.querySelector('.container').appendChild(container);
+
+            // Move to registry first
+            const registry = document.querySelector('.container-registry');
+            container.style.left = (registry.offsetLeft + registry.offsetWidth / 2 - 15) + 'px';
+            container.style.top = (registry.offsetTop + 20) + 'px';
+
+            setTimeout(() => {
+                // Find target node in the stage
+                const targetStage = stage === 'test' ? testStage : prodStage;
+                const node = targetStage.querySelector('.node');
+                const pods = node.querySelectorAll('.pod');
+
+                // Animate containers to pods
+                pods.forEach((pod, index) => {
+                    const newContainer = createContainerImage();
+                    document.querySelector('.container').appendChild(newContainer);
+                    newContainer.style.left = container.style.left;
+                    newContainer.style.top = container.style.top;
+
+                    setTimeout(() => {
+                        const rect = pod.getBoundingClientRect();
+                        newContainer.style.left = (rect.left + window.scrollX) + 'px';
+                        newContainer.style.top = (rect.top + window.scrollY) + 'px';
+                        newContainer.style.transform = 'scale(0.5)';
+
+                        setTimeout(() => {
+                            pod.style.backgroundColor = index === 0 ? '#93c5fd' : '#fdba74';
+                            pod.style.transform = 'scale(1.1)';
+                            setTimeout(() => {
+                                pod.style.transform = 'scale(1)';
+                                newContainer.remove();
+                            }, 300);
+                        }, 500);
+                    }, index * 500);
+                });
+
+                // Remove original container
+                setTimeout(() => {
+                    container.remove();
+                    if (onComplete) onComplete();
+                }, pods.length * 500 + 1000);
+            }, 1000);
+        }
         
         // Reset the deployment
         function resetDeployment(resetRunningState = true) {
@@ -376,13 +536,16 @@
             gate1.classList.remove('bg-green-500');
             gate1.classList.add('bg-gray-500');
             
-            setTimeout(() => {
-                updateStageStatus(testStage, 'success');
-                deploymentStage = 2;
-                
-                // Move to second gate
-                movePackageTo(gate2, checkGate2);
-            }, 3000);
+            // Deploy to test environment
+            deployToKubernetes('test', () => {
+                setTimeout(() => {
+                    updateStageStatus(testStage, 'success');
+                    deploymentStage = 2;
+                    
+                    // Move to second gate
+                    movePackageTo(gate2, checkGate2);
+                }, 2000);
+            });
         }
         
         // Check second quality gate
@@ -429,21 +592,16 @@
             gate2.classList.remove('bg-green-500');
             gate2.classList.add('bg-gray-500');
             
-            setTimeout(() => {
-                updateStageStatus(prodStage, 'success');
-                deploymentStage = 3;
-                
-                // Add success animation to code package
-                codePackage.style.transform = 'scale(1.5)';
-                codePackage.style.backgroundColor = '#10b981'; // green-500
-                
+            // Deploy to production environment
+            deployToKubernetes('prod', () => {
                 setTimeout(() => {
-                    codePackage.style.transform = 'scale(1)';
+                    updateStageStatus(prodStage, 'success');
+                    deploymentStage = 3;
                     
                     // Enable restarting
                     isRunning = false;
-                }, 1000);
-            }, 2000);
+                }, 2000);
+            });
         }
         
         // Initialize on page load
