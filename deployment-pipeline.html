@@ -90,7 +90,7 @@
         </div>
         
         <!-- Production Environment with Kubernetes -->
-        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 300px; left: 900px; top: 50px;">
+        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 400px; left: 900px; top: 50px;">
             <h3 class="text-lg font-bold mb-2">Production Environment</h3>
             <p class="text-sm mb-4">Kubernetes Production Cluster</p>
             
@@ -109,6 +109,17 @@
                 </div>
                 <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 2</h4>
+                    <div class="flex gap-2 mt-2">
+                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                            Node.js Pod
+                        </div>
+                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
+                            DB Pod
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
+                    <h4 class="text-sm font-bold">Node 3</h4>
                     <div class="flex gap-2 mt-2">
                         <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             Node.js Pod
@@ -282,37 +293,42 @@
                 // Find target node in the stage
                 const targetStage = stage === 'test' ? testStage : prodStage;
                 const node = targetStage.querySelector('.bg-yellow-50, .bg-green-50');
-                const pods = node.querySelectorAll('.bg-blue-200, .bg-orange-200');
+                const nodes = node.querySelectorAll('.bg-white');
+                let podIndex = 0;
 
-                // Animate containers to pods
-                pods.forEach((pod, index) => {
-                    const newContainer = createContainerImage();
-                    document.querySelector('.relative').appendChild(newContainer);
-                    newContainer.style.left = container.style.left;
-                    newContainer.style.top = container.style.top;
-
-                    setTimeout(() => {
-                        const rect = pod.getBoundingClientRect();
-                        newContainer.style.left = (rect.left + window.scrollX) + 'px';
-                        newContainer.style.top = (rect.top + window.scrollY) + 'px';
-                        newContainer.style.transform = 'scale(0.5)';
+                // Deploy to all nodes
+                nodes.forEach((nodeElement) => {
+                    const pods = nodeElement.querySelectorAll('.p-2.rounded.text-xs');
+                    pods.forEach((pod, index) => {
+                        const newContainer = createContainerImage();
+                        document.querySelector('.relative').appendChild(newContainer);
+                        newContainer.style.left = container.style.left;
+                        newContainer.style.top = container.style.top;
 
                         setTimeout(() => {
-                            pod.classList.remove('bg-white');
-                            pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200', 'scale-110');
+                            const rect = pod.getBoundingClientRect();
+                            newContainer.style.left = (rect.left + window.scrollX) + 'px';
+                            newContainer.style.top = (rect.top + window.scrollY) + 'px';
+                            newContainer.style.transform = 'scale(0.5)';
+
                             setTimeout(() => {
-                                pod.classList.remove('scale-110');
-                                newContainer.remove();
-                            }, 300);
-                        }, 500);
-                    }, index * 500);
+                                pod.classList.remove('bg-white');
+                                pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200', 'scale-110');
+                                setTimeout(() => {
+                                    pod.classList.remove('scale-110');
+                                    newContainer.remove();
+                                }, 300);
+                            }, 500);
+                        }, podIndex * 200);
+                        podIndex++;
+                    });
                 });
 
                 // Remove original container
                 setTimeout(() => {
                     container.remove();
                     if (onComplete) onComplete();
-                }, pods.length * 500 + 1000);
+                }, podIndex * 200 + 1000);
             }, 1000);
         }
         
