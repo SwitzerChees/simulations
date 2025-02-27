@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployment Pipeline Simulation</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+        .stage {
+            position: absolute;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .stage h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .gate {
+            position: absolute;
+            background-color: #6c757d;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 2;
+        }
+        .pipeline {
+            position: absolute;
+            background-color: #e9ecef;
+            height: 10px;
+            z-index: 1;
+        }
+        .code-package {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #0d6efd;
+            border-radius: 5px;
+            transition: all 0.5s ease;
+            z-index: 3;
+        }
+        .status-indicator {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            right: 10px;
+            top: 10px;
+        }
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        .gate-popup {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            display: none;
+        }
+        .gate-popup ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .legend {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container">
+        <!-- Stages -->
+        <div id="dev-stage" class="stage bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 150px;">
+            <h3 class="text-lg">Development</h3>
+            <p class="text-sm">Code is written and unit tested</p>
+            <div class="status-indicator bg-gray-300"></div>
+        </div>
+        
+        <div id="test-stage" class="stage bg-yellow-100 text-yellow-800" style="width: 200px; height: 150px; left: 450px; top: 150px;">
+            <h3 class="text-lg">Testing</h3>
+            <p class="text-sm">Integration and system testing</p>
+            <div class="status-indicator bg-gray-300"></div>
+        </div>
+        
+        <div id="prod-stage" class="stage bg-green-100 text-green-800" style="width: 200px; height: 150px; left: 800px; top: 150px;">
+            <h3 class="text-lg">Production</h3>
+            <p class="text-sm">Live environment</p>
+            <div class="status-indicator bg-gray-300"></div>
+        </div>
+        
+        <!-- Pipelines -->
+        <div class="pipeline" style="width: 150px; left: 300px; top: 225px;"></div>
+        <div class="pipeline" style="width: 150px; left: 650px; top: 225px;"></div>
+        
+        <!-- Quality Gates -->
+        <div id="gate1" class="gate" style="width: 50px; height: 50px; left: 375px; top: 200px;">
+            QG1
+        </div>
+        
+        <div id="gate2" class="gate" style="width: 50px; height: 50px; left: 725px; top: 200px;">
+            QG2
+        </div>
+        
+        <!-- Gate Popups -->
+        <div id="gate1-popup" class="gate-popup" style="left: 350px; top: 260px;">
+            <h4 class="font-bold">Quality Gate 1</h4>
+            <ul>
+                <li>Code review</li>
+                <li>Unit tests pass (>80%)</li>
+                <li>Static code analysis</li>
+                <li>Build succeeds</li>
+            </ul>
+        </div>
+        
+        <div id="gate2-popup" class="gate-popup" style="left: 700px; top: 260px;">
+            <h4 class="font-bold">Quality Gate 2</h4>
+            <ul>
+                <li>Integration tests pass</li>
+                <li>Performance tests</li>
+                <li>Security scan</li>
+                <li>UAT approval</li>
+            </ul>
+        </div>
+        
+        <!-- Controls -->
+        <div class="controls">
+            <button id="startBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Start Deployment
+            </button>
+            <button id="resetBtn" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                Reset
+            </button>
+        </div>
+        
+        <!-- Legend -->
+        <div class="legend">
+            <h4 class="font-bold mb-2">Legend</h4>
+            <div class="legend-item">
+                <div class="legend-color bg-blue-500"></div>
+                <span>Code Package</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bg-green-400"></div>
+                <span>Success</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bg-red-500"></div>
+                <span>Failure</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bg-yellow-400"></div>
+                <span>In Progress</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #6c757d;"></div>
+                <span>Quality Gate</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Main variables
+        let deploymentStage = 0;
+        let codePackage = null;
+        let isRunning = false;
+        let failureRate = 0.2; // 20% chance of failure at each gate
+        
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const devStage = document.getElementById('dev-stage');
+        const testStage = document.getElementById('test-stage');
+        const prodStage = document.getElementById('prod-stage');
+        const gate1 = document.getElementById('gate1');
+        const gate2 = document.getElementById('gate2');
+        const gate1Popup = document.getElementById('gate1-popup');
+        const gate2Popup = document.getElementById('gate2-popup');
+        
+        // Event listeners
+        startBtn.addEventListener('click', startDeployment);
+        resetBtn.addEventListener('click', resetDeployment);
+        
+        // Gate popup listeners
+        gate1.addEventListener('mouseenter', () => gate1Popup.style.display = 'block');
+        gate1.addEventListener('mouseleave', () => gate1Popup.style.display = 'none');
+        gate2.addEventListener('mouseenter', () => gate2Popup.style.display = 'block');
+        gate2.addEventListener('mouseleave', () => gate2Popup.style.display = 'none');
+        
+        // Initialize the state
+        function init() {
+            updateStageStatus(devStage, 'idle');
+            updateStageStatus(testStage, 'idle');
+            updateStageStatus(prodStage, 'idle');
+        }
+        
+        // Start the deployment process
+        function startDeployment() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            deploymentStage = 0;
+            resetDeployment(false);
+            
+            // Create code package
+            codePackage = document.createElement('div');
+            codePackage.className = 'code-package';
+            codePackage.style.left = (devStage.offsetLeft + devStage.offsetWidth / 2 - 15) + 'px';
+            codePackage.style.top = (devStage.offsetTop + devStage.offsetHeight / 2 - 15) + 'px';
+            document.querySelector('.container').appendChild(codePackage);
+            
+            // Start the deployment flow
+            updateStageStatus(devStage, 'processing');
+            simulateDevelopment();
+        }
+        
+        // Reset the deployment
+        function resetDeployment(resetRunningState = true) {
+            if (codePackage && codePackage.parentNode) {
+                codePackage.parentNode.removeChild(codePackage);
+            }
+            
+            codePackage = null;
+            if (resetRunningState) {
+                isRunning = false;
+            }
+            
+            updateStageStatus(devStage, 'idle');
+            updateStageStatus(testStage, 'idle');
+            updateStageStatus(prodStage, 'idle');
+        }
+        
+        // Update the visual status of a stage
+        function updateStageStatus(element, status) {
+            const indicator = element.querySelector('.status-indicator');
+            
+            switch(status) {
+                case 'idle':
+                    indicator.className = 'status-indicator bg-gray-300';
+                    element.classList.remove('border-2', 'border-yellow-400', 'shadow-lg');
+                    break;
+                case 'processing':
+                    indicator.className = 'status-indicator bg-yellow-400 loading';
+                    element.classList.add('border-2', 'border-yellow-400', 'shadow-lg');
+                    break;
+                case 'success':
+                    indicator.className = 'status-indicator bg-green-400';
+                    element.classList.remove('border-2', 'border-yellow-400');
+                    element.classList.add('border-2', 'border-green-400', 'shadow-lg');
+                    break;
+                case 'failure':
+                    indicator.className = 'status-indicator bg-red-500';
+                    element.classList.remove('border-2', 'border-yellow-400');
+                    element.classList.add('border-2', 'border-red-500', 'shadow-lg');
+                    break;
+            }
+        }
+        
+        // Move code package to a target
+        function movePackageTo(target, onComplete) {
+            const targetX = target.offsetLeft + target.offsetWidth / 2 - 15;
+            const targetY = target.offsetTop + target.offsetHeight / 2 - 15;
+            
+            codePackage.style.left = targetX + 'px';
+            codePackage.style.top = targetY + 'px';
+            
+            // Wait for transition to complete
+            setTimeout(onComplete, 600);
+        }
+        
+        // Development stage simulation
+        function simulateDevelopment() {
+            setTimeout(() => {
+                updateStageStatus(devStage, 'success');
+                deploymentStage = 1;
+                
+                // Move to first gate
+                movePackageTo(gate1, checkGate1);
+            }, 2000);
+        }
+        
+        // Check first quality gate
+        function checkGate1() {
+            gate1.classList.add('bg-yellow-500');
+            
+            setTimeout(() => {
+                const passed = Math.random() > failureRate;
+                
+                if (passed) {
+                    gate1.classList.remove('bg-yellow-500');
+                    gate1.classList.add('bg-green-500');
+                    
+                    setTimeout(() => {
+                        // Move to test stage
+                        movePackageTo(testStage, enterTestStage);
+                    }, 1000);
+                } else {
+                    gate1.classList.remove('bg-yellow-500');
+                    gate1.classList.add('bg-red-500');
+                    
+                    // Simulate failure
+                    setTimeout(() => {
+                        if (codePackage) {
+                            codePackage.style.opacity = '0';
+                            setTimeout(() => {
+                                if (codePackage && codePackage.parentNode) {
+                                    codePackage.parentNode.removeChild(codePackage);
+                                }
+                                codePackage = null;
+                                isRunning = false;
+                                gate1.classList.remove('bg-red-500');
+                                gate1.classList.add('bg-gray-500');
+                            }, 500);
+                        }
+                    }, 1000);
+                }
+            }, 2000);
+        }
+        
+        // Enter test stage
+        function enterTestStage() {
+            updateStageStatus(testStage, 'processing');
+            gate1.classList.remove('bg-green-500');
+            gate1.classList.add('bg-gray-500');
+            
+            setTimeout(() => {
+                updateStageStatus(testStage, 'success');
+                deploymentStage = 2;
+                
+                // Move to second gate
+                movePackageTo(gate2, checkGate2);
+            }, 3000);
+        }
+        
+        // Check second quality gate
+        function checkGate2() {
+            gate2.classList.add('bg-yellow-500');
+            
+            setTimeout(() => {
+                const passed = Math.random() > failureRate;
+                
+                if (passed) {
+                    gate2.classList.remove('bg-yellow-500');
+                    gate2.classList.add('bg-green-500');
+                    
+                    setTimeout(() => {
+                        // Move to production stage
+                        movePackageTo(prodStage, enterProdStage);
+                    }, 1000);
+                } else {
+                    gate2.classList.remove('bg-yellow-500');
+                    gate2.classList.add('bg-red-500');
+                    
+                    // Simulate failure
+                    setTimeout(() => {
+                        if (codePackage) {
+                            codePackage.style.opacity = '0';
+                            setTimeout(() => {
+                                if (codePackage && codePackage.parentNode) {
+                                    codePackage.parentNode.removeChild(codePackage);
+                                }
+                                codePackage = null;
+                                isRunning = false;
+                                gate2.classList.remove('bg-red-500');
+                                gate2.classList.add('bg-gray-500');
+                            }, 500);
+                        }
+                    }, 1000);
+                }
+            }, 2000);
+        }
+        
+        // Enter production stage
+        function enterProdStage() {
+            updateStageStatus(prodStage, 'processing');
+            gate2.classList.remove('bg-green-500');
+            gate2.classList.add('bg-gray-500');
+            
+            setTimeout(() => {
+                updateStageStatus(prodStage, 'success');
+                deploymentStage = 3;
+                
+                // Add success animation to code package
+                codePackage.style.transform = 'scale(1.5)';
+                codePackage.style.backgroundColor = '#10b981'; // green-500
+                
+                setTimeout(() => {
+                    codePackage.style.transform = 'scale(1)';
+                    
+                    // Enable restarting
+                    isRunning = false;
+                }, 1000);
+            }, 2000);
+        }
+        
+        // Initialize on page load
+        window.onload = init;
+    </script>
+</body>
+</html>
