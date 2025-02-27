@@ -37,6 +37,7 @@
         .scanning::after {
             content: '';
             @apply absolute top-0 left-0 w-full h-5 bg-gradient-to-b from-transparent via-white/70 to-transparent animate-scan pointer-events-none;
+            z-index: 5; /* Lower z-index than badges */
         }
 
         .gate-status-dot::before {
@@ -104,6 +105,11 @@
         
         .cd-border {
             border: 2px solid #10b981 !important;
+        }
+
+        /* Fix for flickering popovers */
+        [data-step-label] {
+            pointer-events: none;
         }
     </style>
 </head>
@@ -224,12 +230,12 @@
         <div class="absolute h-2.5 bg-gray-200 z-0" style="width: 100px; left: 800px; top: 125px;"></div>
         
         <!-- Quality Gates -->
-        <div id="gate1" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 overflow-hidden ci-border" style="left: 325px; top: 100px;">
+        <div id="gate1" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 ci-border" style="left: 325px; top: 100px;">
             <div class="ci-badge">CI</div>
             QG1
         </div>
         
-        <div id="gate2" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 overflow-hidden cd-border" style="left: 825px; top: 100px;">
+        <div id="gate2" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 cd-border" style="left: 825px; top: 100px;">
             <div class="cd-badge">CD</div>
             QG2
         </div>
