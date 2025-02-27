@@ -110,10 +110,89 @@
         renderer.setSize(document.getElementById('simulation-container').offsetWidth, 400);
 
         // Create server representation
-        const serverGeometry = new THREE.BoxGeometry(2, 2, 2);
-        const serverMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-        const server = new THREE.Mesh(serverGeometry, serverMaterial);
-        scene.add(server);
+        const serverGroup = new THREE.Group();
+
+        // Main server tower
+        const towerGeometry = new THREE.BoxGeometry(1.5, 2.5, 1);
+        const towerMaterial = new THREE.MeshPhongMaterial({
+            color: 0x00ff00,
+            shininess: 50,
+            specular: 0x666666
+        });
+        const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+        serverGroup.add(tower);
+
+        // Server rack details
+        for (let i = 0; i < 5; i++) {
+            const rackGeometry = new THREE.BoxGeometry(1.2, 0.2, 0.8);
+            const rackMaterial = new THREE.MeshPhongMaterial({
+                color: 0x333333,
+                shininess: 30
+            });
+            const rack = new THREE.Mesh(rackGeometry, rackMaterial);
+            rack.position.y = -1 + (i * 0.5);
+            rack.position.z = 0.1;
+            serverGroup.add(rack);
+
+            // Add LED lights to each rack
+            const ledGeometry = new THREE.CircleGeometry(0.05, 8);
+            const ledMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 0.5
+            });
+            const led1 = new THREE.Mesh(ledGeometry, ledMaterial);
+            const led2 = new THREE.Mesh(ledGeometry, ledMaterial.clone());
+            led1.position.set(-0.4, -1 + (i * 0.5), 0.51);
+            led2.position.set(0.4, -1 + (i * 0.5), 0.51);
+            serverGroup.add(led1);
+            serverGroup.add(led2);
+        }
+
+        // Top ventilation grid
+        const gridGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.1, 8);
+        const gridMaterial = new THREE.MeshPhongMaterial({
+            color: 0x444444,
+            shininess: 20
+        });
+        const grid = new THREE.Mesh(gridGeometry, gridMaterial);
+        grid.rotation.x = Math.PI / 2;
+        grid.position.y = 1.3;
+        grid.position.z = 0;
+        serverGroup.add(grid);
+
+        // Fan effect (rotating inner cylinder)
+        const fanGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.05, 3);
+        const fanMaterial = new THREE.MeshPhongMaterial({
+            color: 0x666666,
+            shininess: 30,
+            transparent: true,
+            opacity: 0.7
+        });
+        const fan = new THREE.Mesh(fanGeometry, fanMaterial);
+        fan.rotation.x = Math.PI / 2;
+        fan.position.y = 1.3;
+        fan.position.z = 0;
+        serverGroup.add(fan);
+
+        // Base platform
+        const baseGeometry = new THREE.CylinderGeometry(1, 1.2, 0.2, 8);
+        const baseMaterial = new THREE.MeshPhongMaterial({
+            color: 0x444444,
+            shininess: 30
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = -1.4;
+        serverGroup.add(base);
+
+        scene.add(serverGroup);
+
+        // Store references for animation
+        const server = {
+            group: serverGroup,
+            fan: fan,
+            leds: serverGroup.children.filter(child => child.geometry instanceof THREE.CircleGeometry)
+        };
 
         // Add lighting
         const light = new THREE.PointLight(0xffffff, 1, 100);
@@ -297,15 +376,30 @@
                 });
 
                 // Server visual feedback
-                server.material.color.setHSL(
+                const serverColor = new THREE.Color();
+                serverColor.setHSL(
                     (100 - gameState.serverLoad) / 300,
                     1,
                     0.5
                 );
+                // Update main tower color
+                server.group.children[0].material.color.copy(serverColor);
+                server.group.children[0].material.emissive.copy(serverColor).multiplyScalar(0.2);
             }
 
-            server.rotation.x += 0.01;
-            server.rotation.y += 0.01;
+            server.group.rotation.y += 0.01;
+            server.fan.rotation.z += 0.1;
+
+            // Pulse LED lights based on server load
+            const pulseIntensity = 0.5 + (Math.sin(Date.now() * 0.005) * 0.5);
+            server.leds.forEach(led => {
+                led.material.emissiveIntensity = pulseIntensity * (1 - gameState.serverLoad / 100);
+                led.material.color.setHSL(
+                    (100 - gameState.serverLoad) / 300,
+                    1,
+                    0.5
+                );
+            });
 
             renderer.render(scene, camera);
         }
