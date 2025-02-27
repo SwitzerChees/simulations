@@ -56,6 +56,18 @@
             content: '';
             @apply absolute -inset-1 border-2 border-green-500 rounded-lg transition-all duration-300 animate-pulse;
         }
+        
+        /* Connection Path Animations */
+        .connection-path {
+            stroke-dasharray: 12;
+            animation: dash 1.5s linear infinite;
+        }
+        
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -24;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -81,10 +93,20 @@
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>Node.js Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -106,10 +128,20 @@
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>Node.js Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -119,10 +151,20 @@
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>Node.js Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -132,10 +174,20 @@
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>Node.js Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
+                            <div class="flex gap-1 mt-1">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -224,6 +276,31 @@
                 <span>Quality Gate</span>
             </div>
         </div>
+        
+        <!-- Deployment Status Banner -->
+        <div id="deployment-status" class="absolute top-5 left-1/2 transform -translate-x-1/2 bg-white/90 rounded-lg p-3 shadow-lg z-20 hidden transition-all duration-300 w-[600px]">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-bold text-gray-800">Deployment in Progress</h3>
+                <span id="deployment-version" class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono">v1.0.0</span>
+            </div>
+            <div class="flex justify-between mb-1">
+                <div class="flex-1 text-xs text-center">Build</div>
+                <div class="flex-1 text-xs text-center">Quality Gate 1</div>
+                <div class="flex-1 text-xs text-center">Test</div>
+                <div class="flex-1 text-xs text-center">Quality Gate 2</div>
+                <div class="flex-1 text-xs text-center">Production</div>
+            </div>
+            <div class="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full bg-blue-500 transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <div id="deployment-message" class="text-xs text-gray-600 mt-2 text-center">Initializing deployment...</div>
+        </div>
+        
+        <!-- Connection Lines -->
+        <svg class="absolute z-0" style="width: 100%; height: 100%;">
+            <path id="dev-test-path" class="connection-path" d="M 300 125 L 400 125" stroke="#ccc" stroke-width="2" fill="none" opacity="0.5" />
+            <path id="test-prod-path" class="connection-path" d="M 800 125 L 900 125" stroke="#ccc" stroke-width="2" fill="none" opacity="0.5" />
+        </svg>
     </div>
     
     <script>
@@ -243,6 +320,10 @@
         const gate2 = document.getElementById('gate2');
         const gate1Popup = document.getElementById('gate1-popup');
         const gate2Popup = document.getElementById('gate2-popup');
+        const deploymentStatus = document.getElementById('deployment-status');
+        const progressBar = document.getElementById('progress-bar');
+        const deploymentMessage = document.getElementById('deployment-message');
+        const deploymentVersion = document.getElementById('deployment-version');
         
         // Event listeners
         startBtn.addEventListener('click', startDeployment);
@@ -264,17 +345,31 @@
         // Start the deployment process
         function startDeployment() {
             if (isRunning) return;
-            
             isRunning = true;
-            deploymentStage = 0;
+            
+            // Reset the deployment without resetting the running state
             resetDeployment(false);
             
-            // Create code package
+            // Create a new version for this deployment
+            window.currentVersion = generateVersionNumber();
+            
+            // Create the code package
             codePackage = document.createElement('div');
-            codePackage.className = 'absolute w-8 h-8 bg-blue-600 rounded transition-all duration-500 shadow-md z-10';
-            codePackage.style.left = (devStage.offsetLeft + devStage.offsetWidth / 2 - 15) + 'px';
+            codePackage.classList.add('bg-blue-500', 'text-white', 'p-2', 'rounded', 'shadow-md', 'absolute', 'transition-all', 'duration-300', 'z-10', 'cursor-pointer');
+            codePackage.innerHTML = 'Code<br>Package';
+            codePackage.style.width = '60px';
+            codePackage.style.textAlign = 'center';
+            codePackage.style.left = (devStage.offsetLeft + devStage.offsetWidth / 2 - 30) + 'px';
             codePackage.style.top = (devStage.offsetTop + devStage.offsetHeight / 2 - 15) + 'px';
             document.querySelector('.relative').appendChild(codePackage);
+            
+            // Add tooltip to package
+            codePackage.title = `Version: ${window.currentVersion}\nCommit: ${generateCommitHash()}\nBuild time: ${new Date().toLocaleTimeString()}`;
+            
+            // Show deployment status banner
+            deploymentStatus.classList.remove('hidden');
+            deploymentMessage.textContent = 'Initializing deployment...';
+            deploymentVersion.textContent = 'v' + new Date().toISOString().slice(11,19);
             
             // Start the deployment flow
             updateStageStatus(devStage, 'processing');
@@ -363,7 +458,11 @@
                                             setTimeout(() => {
                                                 oldPod.style.left = (rect.left + window.scrollX - 20) + 'px';
                                                 oldPod.style.opacity = '0';
-                                                setTimeout(() => oldPod.remove(), 300);
+                                                setTimeout(() => {
+                                                    if (oldPod.parentNode) {
+                                                        oldPod.parentNode.removeChild(oldPod);
+                                                    }
+                                                }, 300);
                                             }, 100);
                                         }
                                         
@@ -372,6 +471,11 @@
                                         pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200');
                                         pod.querySelector('.pod-version').textContent = window.currentVersion;
                                         
+                                        // Randomly set pod health
+                                        const healthStates = ['excellent', 'good', 'warning', 'error'];
+                                        const randomHealth = healthStates[Math.floor(Math.random() * (targetStage === prodStage ? 2 : healthStates.length))];
+                                        updatePodHealth(pod, randomHealth);
+
                                         // Clean up the temporary new pod
                                         setTimeout(() => {
                                             newPod.remove();
@@ -442,6 +546,9 @@
             updateStageStatus(devStage, 'idle');
             updateStageStatus(testStage, 'idle');
             updateStageStatus(prodStage, 'idle');
+            
+            // Hide deployment status banner
+            deploymentStatus.classList.add('hidden');
         }
         
         // Update the visual status of a stage
@@ -491,6 +598,10 @@
                 
                 // Move to first gate
                 movePackageTo(gate1, checkGate1);
+                
+                // Update deployment status banner
+                deploymentMessage.textContent = 'Development complete';
+                progressBar.style.width = '20%';
             }, 2000);
         }
         
@@ -597,6 +708,10 @@
                                     artifact.remove();
                                     // Move to test stage
                                     movePackageTo(testStage, enterTestStage);
+                                    
+                                    // Update deployment status banner
+                                    deploymentMessage.textContent = 'Quality Gate 1 passed';
+                                    progressBar.style.width = '40%';
                                 }, 500);
                             }, 500);
                         }, 500);
@@ -640,6 +755,10 @@
                     
                     // Move to second gate
                     movePackageTo(gate2, checkGate2);
+                    
+                    // Update deployment status banner
+                    deploymentMessage.textContent = 'Test environment deployed';
+                    progressBar.style.width = '60%';
                 }, 2000);
             });
         }
@@ -675,6 +794,10 @@
                     setTimeout(() => {
                         // Move to production stage
                         movePackageTo(prodStage, enterProdStage);
+                        
+                        // Update deployment status banner
+                        deploymentMessage.textContent = 'Quality Gate 2 passed';
+                        progressBar.style.width = '80%';
                     }, 1000);
                 } else {
                     gate2.classList.remove('bg-yellow-500');
@@ -715,8 +838,56 @@
                     
                     // Enable restarting
                     isRunning = false;
+                    
+                    // Update deployment status banner
+                    deploymentMessage.textContent = 'Deployment complete';
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        deploymentStatus.classList.add('hidden');
+                    }, 2000);
                 }, 2000);
             });
+        }
+        
+        // Generate a random commit hash
+        function generateCommitHash() {
+            const characters = '0123456789abcdef';
+            let result = '';
+            for (let i = 0; i < 7; i++) {
+                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return result;
+        }
+        
+        // Generate a version number
+        function generateVersionNumber() {
+            const now = new Date();
+            const major = 1;
+            const minor = Math.floor(Math.random() * 10);
+            const patch = Math.floor(Math.random() * 20);
+            return `${major}.${minor}.${patch}`;
+        }
+        
+        // Update pod health indicators
+        function updatePodHealth(pod, health) {
+            // health can be 'excellent', 'good', 'warning', 'error'
+            const indicators = pod.querySelectorAll('.w-2.h-2.rounded-full');
+            
+            if (health === 'excellent') {
+                indicators.forEach(i => i.className = 'w-2 h-2 rounded-full bg-green-500');
+            } else if (health === 'good') {
+                indicators[0].className = 'w-2 h-2 rounded-full bg-green-500';
+                indicators[1].className = 'w-2 h-2 rounded-full bg-green-500';
+                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
+            } else if (health === 'warning') {
+                indicators[0].className = 'w-2 h-2 rounded-full bg-yellow-500';
+                indicators[1].className = 'w-2 h-2 rounded-full bg-yellow-500';
+                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
+            } else if (health === 'error') {
+                indicators[0].className = 'w-2 h-2 rounded-full bg-red-500';
+                indicators[1].className = 'w-2 h-2 rounded-full bg-gray-300';
+                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
+            }
         }
         
         // Initialize on page load
