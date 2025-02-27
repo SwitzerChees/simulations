@@ -160,8 +160,7 @@
         <div class="absolute bg-purple-100 text-purple-800 p-4 rounded-lg border-2 border-purple-300 transition-all duration-300" 
              style="width: 150px; left: 525px; top: 400px;">
             <h4 class="text-sm font-bold mb-2">Container Registry</h4>
-            <div class="space-y-1 text-xs">
-                <div class="bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50">nodejs-app:latest</div>
+            <div class="space-y-1 text-xs max-h-[150px] overflow-y-auto pr-2" style="scrollbar-width: thin;">
                 <div class="bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50">database:latest</div>
             </div>
         </div>
@@ -389,6 +388,18 @@
                         podIndex++;
                     });
                 });
+                
+                // Add image to container registry
+                const registry = document.querySelector('.bg-purple-100 .space-y-1');
+                const newImage = document.createElement('div');
+                newImage.className = 'bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50';
+                newImage.textContent = `nodejs-app:${window.currentVersion}`;
+                registry.insertBefore(newImage, registry.firstChild);
+                
+                // Keep only the last 4 images
+                while (registry.children.length > 4) {
+                    registry.removeChild(registry.lastChild);
+                }
                 
                 // Update version label after deployment
                 setTimeout(() => {
