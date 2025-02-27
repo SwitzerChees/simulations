@@ -202,14 +202,17 @@
 
         camera.position.z = 5;
 
+        // Defense configurations
+        const defenseConfigs = {
+            'rate-limiting': { active: false, cooldown: 0, cost: 20, effectiveness: { 'SYN Flood': 0.8, 'HTTP Flood': 0.4, 'DNS Amplification': 0.3 } },
+            'firewall': { active: false, cooldown: 0, cost: 30, effectiveness: { 'SYN Flood': 0.3, 'HTTP Flood': 0.8, 'DNS Amplification': 0.4 } },
+            'cdn': { active: false, cooldown: 0, cost: 40, effectiveness: { 'SYN Flood': 0.4, 'HTTP Flood': 0.3, 'DNS Amplification': 0.8 } }
+        };
+
         // Game State
         let gameState = {
             isAttackActive: false,
-            defenses: {
-                rateLimiting: { active: false, cooldown: 0, cost: 20, effectiveness: { 'SYN Flood': 0.8, 'HTTP Flood': 0.4, 'DNS Amplification': 0.3 } },
-                firewall: { active: false, cooldown: 0, cost: 30, effectiveness: { 'SYN Flood': 0.3, 'HTTP Flood': 0.8, 'DNS Amplification': 0.4 } },
-                cdn: { active: false, cooldown: 0, cost: 40, effectiveness: { 'SYN Flood': 0.4, 'HTTP Flood': 0.3, 'DNS Amplification': 0.8 } }
-            },
+            defenses: defenseConfigs,
             requestsPerSecond: 0,
             targetRequestsPerSecond: 0,
             serverLoad: 0,
@@ -336,7 +339,7 @@
                 gameState.targetServerLoad = Math.min(100, gameState.targetRequestsPerSecond);
 
                 // Apply defenses to target load with effectiveness based on attack type
-                Object.keys(gameState.defenses).forEach(defense => {
+                ['rate-limiting', 'firewall', 'cdn'].forEach(defense => {
                     if (gameState.defenses[defense].active) {
                         const effectiveness = gameState.defenses[defense].effectiveness[gameState.currentAttack];
                         gameState.targetServerLoad *= (1 - effectiveness);
@@ -445,9 +448,8 @@
         // Defense Controls
         ['rate-limiting', 'firewall', 'cdn'].forEach(defense => {
             document.getElementById(defense).addEventListener('click', () => {
-                const defenseKey = defense.replace('-', '');
                 const button = document.getElementById(defense);
-                const defenseState = gameState.defenses[defenseKey];
+                const defenseState = gameState.defenses[defense];
 
                 if (!gameState.isAttackActive) {
                     logEvent('Start the attack first!');
@@ -455,7 +457,7 @@
                 }
 
                 if (defenseState.cooldown > 0) {
-                    logEvent(`${defense.replace('-', ' ').toUpperCase()} is on cooldown!`);
+                    logEvent(`${defense.replace(/-/g, ' ').toUpperCase()} is on cooldown!`);
                     return;
                 }
 
@@ -471,7 +473,8 @@
 
                 // Visual feedback
                 button.classList.add('opacity-50');
-                logEvent(`${defense.replace('-', ' ').toUpperCase()} activated against ${gameState.currentAttack}!`);
+                const effectiveness = Math.round(defenseState.effectiveness[gameState.currentAttack] * 100);
+                logEvent(`${defense.replace(/-/g, ' ').toUpperCase()} activated! ${effectiveness}% effective against ${gameState.currentAttack}`);
 
                 // Start cooldown animation
                 const cooldownBar = button.querySelector('.cooldown-bar');
@@ -481,9 +484,23 @@
                 setTimeout(() => {
                     defenseState.active = false;
                     button.classList.remove('opacity-50');
-                    logEvent(`${defense.replace('-', ' ').toUpperCase()} deactivated.`);
+                    logEvent(`${defense.replace(/-/g, ' ').toUpperCase()} deactivated.`);
                 }, 3000);
             });
+        });
+
+        // Reset game state when stopping attack
+        document.getElementById('start-attack').addEventListener('click', () => {
+            if (gameState.isAttackActive) {
+                // Reset all defenses when stopping
+                ['rate-limiting', 'firewall', 'cdn'].forEach(defense => {
+                    gameState.defenses[defense].active = false;
+                    gameState.defenses[defense].cooldown = 0;
+                    const button = document.getElementById(defense);
+                    button.classList.remove('opacity-50');
+                    button.querySelector('.cooldown-bar').style.transform = 'scaleX(0)';
+                });
+            }
         });
 
         // Handle window resize
