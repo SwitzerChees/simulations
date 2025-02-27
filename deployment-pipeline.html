@@ -95,16 +95,12 @@
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
@@ -130,16 +126,12 @@
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
@@ -153,16 +145,12 @@
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
@@ -176,16 +164,12 @@
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
                         <div class="bg-white p-2 rounded text-xs transition-all duration-300 hover:scale-105 opacity-0">
                             <div>DB Pod</div>
                             <div class="text-[10px] mt-1 text-gray-500 pod-version"></div>
                             <div class="flex gap-1 mt-1">
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
                                 <div class="w-2 h-2 rounded-full bg-green-500"></div>
                             </div>
                         </div>
@@ -483,10 +467,8 @@
                                         pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200');
                                         pod.querySelector('.pod-version').textContent = `${version.major}.${version.minor}.${version.patch}`;
                                         
-                                        // Randomly set pod health
-                                        const healthStates = ['excellent', 'good', 'warning', 'error'];
-                                        const randomHealth = healthStates[Math.floor(Math.random() * (targetStage === prodStage ? 2 : healthStates.length))];
-                                        updatePodHealth(pod, randomHealth);
+                                        // Set pod health to excellent
+                                        updatePodHealth(pod, 'excellent');
 
                                         // Clean up the temporary new pod
                                         setTimeout(() => {
@@ -904,21 +886,7 @@
             // health can be 'excellent', 'good', 'warning', 'error'
             const indicators = pod.querySelectorAll('.w-2.h-2.rounded-full');
             
-            if (health === 'excellent') {
-                indicators.forEach(i => i.className = 'w-2 h-2 rounded-full bg-green-500');
-            } else if (health === 'good') {
-                indicators[0].className = 'w-2 h-2 rounded-full bg-green-500';
-                indicators[1].className = 'w-2 h-2 rounded-full bg-green-500';
-                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
-            } else if (health === 'warning') {
-                indicators[0].className = 'w-2 h-2 rounded-full bg-yellow-500';
-                indicators[1].className = 'w-2 h-2 rounded-full bg-yellow-500';
-                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
-            } else if (health === 'error') {
-                indicators[0].className = 'w-2 h-2 rounded-full bg-red-500';
-                indicators[1].className = 'w-2 h-2 rounded-full bg-gray-300';
-                indicators[2].className = 'w-2 h-2 rounded-full bg-gray-300';
-            }
+            indicators.forEach(i => i.className = 'w-2 h-2 rounded-full bg-green-500');
         }
         
         // Initialize on page load
