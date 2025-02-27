@@ -309,6 +309,7 @@
         let codePackage = null;
         let isRunning = false;
         let failureRate = 0.2; // 20% chance of failure at each gate
+        let version = { major: 1, minor: 0, patch: 0 };
         
         // DOM elements
         const startBtn = document.getElementById('startBtn');
@@ -351,7 +352,15 @@
             resetDeployment(false);
             
             // Create a new version for this deployment
-            window.currentVersion = generateVersionNumber();
+            version.patch++;
+            if (version.patch >= 10) {
+                version.patch = 0;
+                version.minor++;
+            }
+            if (version.minor >= 10) {
+                version.minor = 0;
+                version.major++;
+            }
             
             // Create the code package
             codePackage = document.createElement('div');
@@ -364,12 +373,12 @@
             document.querySelector('.relative').appendChild(codePackage);
             
             // Add tooltip to package
-            codePackage.title = `Version: ${window.currentVersion}\nCommit: ${generateCommitHash()}\nBuild time: ${new Date().toLocaleTimeString()}`;
+            codePackage.title = `Version: ${version.major}.${version.minor}.${version.patch}\nCommit: ${generateCommitHash()}\nBuild time: ${new Date().toLocaleTimeString()}`;
             
             // Show deployment status banner
             deploymentStatus.classList.remove('hidden');
             deploymentMessage.textContent = 'Initializing deployment...';
-            deploymentVersion.textContent = 'v' + new Date().toISOString().slice(11,19);
+            deploymentVersion.textContent = `v${version.major}.${version.minor}.${version.patch}`;
             
             // Start the deployment flow
             updateStageStatus(devStage, 'processing');
@@ -389,9 +398,12 @@
             document.querySelector('.relative').appendChild(container);
             
             // Update version label
-            const targetStage = stage === 'test' ? testStage : prodStage;
+            const targetStage = stage === 'test' ? 
+                document.getElementById('test-stage') : 
+                document.getElementById('prod-stage');
+            
             const versionLabel = targetStage.querySelector('.version-label');
-            versionLabel.textContent = 'Deploying ' + window.currentVersion + '...';
+            versionLabel.textContent = 'Deploying ' + version.major + '.' + version.minor + '.' + version.patch + '...';
 
             // Move to registry first
             const registry = document.querySelector('.bg-purple-100');
@@ -423,7 +435,7 @@
                             const delay = Math.random() * 1000 + 500; // Random delay between 500-1500ms
                             setTimeout(() => {
                                 // Only proceed with pod update if it's not already the current version
-                                if (pod.querySelector('.pod-version')?.textContent !== window.currentVersion) {
+                                if (pod.querySelector('.pod-version')?.textContent !== `${version.major}.${version.minor}.${version.patch}`) {
                                     const rect = pod.getBoundingClientRect();
                                     const newPod = document.createElement('div');
                                     newPod.className = `p-2 rounded text-xs transition-all duration-300 hover:scale-105 ${index === 0 ? 'bg-blue-200' : 'bg-orange-200'}`;
@@ -433,7 +445,7 @@
                                     podContent.textContent = pod.querySelector('div:first-child').textContent;
                                     const versionLabel = document.createElement('div');
                                     versionLabel.className = 'text-[10px] mt-1 text-gray-500 pod-version';
-                                    versionLabel.textContent = window.currentVersion;
+                                    versionLabel.textContent = `${version.major}.${version.minor}.${version.patch}`;
                                     newPod.appendChild(podContent);
                                     newPod.appendChild(versionLabel);
                                     newPod.style.position = 'absolute';
@@ -469,7 +481,7 @@
                                         // Update the pod in place
                                         pod.classList.remove('opacity-0', 'bg-white');
                                         pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200');
-                                        pod.querySelector('.pod-version').textContent = window.currentVersion;
+                                        pod.querySelector('.pod-version').textContent = `${version.major}.${version.minor}.${version.patch}`;
                                         
                                         // Randomly set pod health
                                         const healthStates = ['excellent', 'good', 'warning', 'error'];
@@ -497,7 +509,7 @@
                 const registry = document.querySelector('.bg-purple-100 .space-y-1');
                 const newImage = document.createElement('div');
                 newImage.className = 'bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50';
-                newImage.textContent = `nodejs-app:${window.currentVersion}`;
+                newImage.textContent = `nodejs-app:${version.major}.${version.minor}.${version.patch}`;
                 registry.insertBefore(newImage, registry.firstChild);
                 
                 // Keep only the last 4 images
@@ -508,7 +520,7 @@
                 // Update version label after deployment
                 setTimeout(() => {
                     const versionLabel = targetStage.querySelector('.version-label');
-                    versionLabel.textContent = 'Running ' + window.currentVersion;
+                    versionLabel.textContent = 'Running ' + version.major + '.' + version.minor + '.' + version.patch;
                 }, podIndex * 200);
 
                 // Remove original container
@@ -529,7 +541,7 @@
             codePackage = null;
             
             // Only reset if no deployment is active
-            if (!window.currentVersion) {
+            if (!version.major) {
                 document.querySelectorAll('.version-label').forEach(label => {
                     label.textContent = 'No version deployed';
                 });
@@ -697,9 +709,7 @@
                             setTimeout(() => {
                                 const newVersion = document.createElement('div');
                                 newVersion.className = 'bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50';
-                                const version = 'nodejs-app:' + new Date().toISOString().slice(11,19);
-                                newVersion.textContent = version;
-                                window.currentVersion = version;
+                                newVersion.textContent = `nodejs-app:${version.major}.${version.minor}.${version.patch}`;
                                 registry.querySelector('.space-y-1').insertBefore(newVersion, registry.querySelector('.space-y-1').firstChild);
                                 
                                 // Scale down and remove artifact
@@ -857,15 +867,6 @@
                 result += characters.charAt(Math.floor(Math.random() * characters.length));
             }
             return result;
-        }
-        
-        // Generate a version number
-        function generateVersionNumber() {
-            const now = new Date();
-            const major = 1;
-            const minor = Math.floor(Math.random() * 10);
-            const patch = Math.floor(Math.random() * 20);
-            return `${major}.${minor}.${patch}`;
         }
         
         // Update pod health indicators
