@@ -6,349 +6,149 @@
     <title>Deployment Pipeline Simulation</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    keyframes: {
+                        scan: {
+                            '0%': { transform: 'translateY(-20px)' },
+                            '100%': { transform: 'translateY(80px)' }
+                        },
+                        pulse: {
+                            '0%': { transform: 'scale(1)', opacity: '1' },
+                            '50%': { transform: 'scale(1.05)', opacity: '0.5' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
+                    },
+                    animation: {
+                        scan: 'scan 1.5s ease-in-out infinite',
+                        pulse: 'pulse 1.5s infinite'
+                    }
+                }
+            }
+        }
+    </script>
     <style>
         body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        canvas {
-            display: block;
-        }
-        .container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-        }
-        .controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            display: flex;
-            gap: 10px;
-        }
-        .stage {
-            position: absolute;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-        }
-        .stage h3 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        .gate {
-            position: absolute;
-            background-color: #6c757d;
-            width: 10px;
-            height: 80px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 2;
-            overflow: hidden;
+            @apply m-0 overflow-hidden font-sans;
         }
 
-        .gate::after {
+        .scanning::after {
             content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 20px;
-            background: linear-gradient(transparent, rgba(255, 255, 255, 0.7), transparent);
-            animation: none;
-            opacity: 0;
-            pointer-events: none;
+            @apply absolute top-0 left-0 w-full h-5 bg-gradient-to-b from-transparent via-white/70 to-transparent animate-scan pointer-events-none;
         }
 
-        .gate.scanning::after {
-            animation: scan 1.5s ease-in-out infinite;
-            opacity: 1;
-        }
-
-        @keyframes scan {
-            0% { transform: translateY(-20px); }
-            100% { transform: translateY(80px); }
-        }
-
-        .gate-status {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background-color: #f3f4f6;
-            border: 2px solid #e5e7eb;
-            left: -7px;
-            top: -30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transform: scale(0);
-            transition: all 0.3s ease;
-        }
-
-        .gate-step-label {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%) translateY(-10px);
-            background-color: white;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            white-space: nowrap;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            opacity: 0;
-            transition: all 0.3s ease;
-            z-index: 10;
-            border: 1px solid #e5e7eb;
-            color: #374151;
-        }
-
-        .gate-step-label.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        .gate-status.show {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        .gate-status::before {
+        .gate-status-dot::before {
             content: '';
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: #9ca3af;
-            transition: all 0.3s ease;
+            @apply absolute w-3 h-3 rounded-full bg-gray-400 transition-colors duration-300;
         }
 
-        .gate-status.success::before {
-            background-color: #10b981;
+        .gate-status-dot.success::before {
+            @apply bg-green-500;
         }
 
-        .gate-status.error::before {
-            background-color: #ef4444;
-        }
-        .pipeline {
-            position: absolute;
-            background-color: #e9ecef;
-            height: 10px;
-            z-index: 1;
-        }
-        .code-package {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            background-color: #0d6efd;
-            border-radius: 5px;
-            transition: all 0.5s ease;
-            z-index: 3;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .gate-status-dot.error::before {
+            @apply bg-red-500;
         }
 
-        .pod {
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            position: relative;
-        }
-
-        .pod::before {
+        .active-pod::before {
             content: '';
-            position: absolute;
-            top: -5px;
-            left: -5px;
-            right: -5px;
-            bottom: -5px;
-            border: 2px solid transparent;
-            border-radius: 7px;
-            transition: all 0.3s ease;
-        }
-
-        .pod.active::before {
-            border-color: #10b981;
-            animation: pulse-border 1.5s infinite;
-        }
-
-        @keyframes pulse-border {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.5; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .k8s-cluster {
-            transition: all 0.3s ease;
-        }
-
-        .node {
-            transition: all 0.3s ease;
-        }
-
-        .container-registry {
-            transition: all 0.3s ease;
-        }
-
-        .container-registry .image {
-            transition: all 0.3s ease;
-        }
-
-        .container-registry .image:hover {
-            transform: translateX(5px);
-            background-color: #f3f4f6;
-        }
-        .status-indicator {
-            position: absolute;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            right: 10px;
-            top: 10px;
-        }
-        .loading {
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 1; }
-            100% { opacity: 0.6; }
-        }
-        .gate-popup {
-            position: absolute;
-            background-color: white;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 10;
-            display: none;
-        }
-        .gate-popup ul {
-            margin: 0;
-            padding-left: 20px;
-        }
-        .legend {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background-color: rgba(255, 255, 255, 0.9);
-            border-radius: 5px;
-            padding: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .legend-color {
-            width: 15px;
-            height: 15px;
-            margin-right: 10px;
-            border-radius: 3px;
+            @apply absolute -inset-1 border-2 border-green-500 rounded-lg transition-all duration-300 animate-pulse;
         }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div class="container">
+    <div class="relative w-full h-screen">
         <!-- Stages -->
-        <div id="dev-stage" class="stage bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 50px;">
-            <h3 class="text-lg">Development</h3>
+        <div id="dev-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-blue-100 text-blue-800" style="width: 200px; height: 150px; left: 100px; top: 50px;">
+            <h3 class="text-lg font-bold mb-2">Development</h3>
             <p class="text-sm">Code is written and unit tested</p>
-            <div class="status-indicator bg-gray-300"></div>
+            <div class="status-indicator absolute w-4 h-4 rounded-full right-3 top-3 bg-gray-300"></div>
         </div>
         
         <!-- Test Environment with Kubernetes -->
-        <div id="test-stage" class="stage bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 50px;">
-            <h3 class="text-lg">Testing Environment</h3>
+        <div id="test-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-yellow-100 text-yellow-800" style="width: 400px; height: 300px; left: 400px; top: 50px;">
+            <h3 class="text-lg font-bold mb-2">Testing Environment</h3>
             <p class="text-sm mb-4">Kubernetes Test Cluster</p>
             
             <!-- Kubernetes Test Cluster -->
-            <div class="k8s-cluster bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300">
-                <div class="node bg-white p-2 rounded mb-2 shadow">
+            <div class="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300 transition-all duration-300">
+                <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 1</h4>
-                    <div class="pods flex gap-2 mt-2">
-                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                    <div class="flex gap-2 mt-2">
+                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             Node.js Pod
                         </div>
-                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             DB Pod
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="status-indicator bg-gray-300"></div>
+            <div class="status-indicator absolute w-4 h-4 rounded-full right-3 top-3 bg-gray-300"></div>
         </div>
         
         <!-- Production Environment with Kubernetes -->
-        <div id="prod-stage" class="stage bg-green-100 text-green-800" style="width: 400px; height: 300px; left: 900px; top: 50px;">
-            <h3 class="text-lg">Production Environment</h3>
+        <div id="prod-stage" class="absolute rounded-lg p-4 text-center shadow-md transition-all duration-300 bg-green-100 text-green-800" style="width: 400px; height: 300px; left: 900px; top: 50px;">
+            <h3 class="text-lg font-bold mb-2">Production Environment</h3>
             <p class="text-sm mb-4">Kubernetes Production Cluster</p>
             
             <!-- Kubernetes Production Cluster -->
-            <div class="k8s-cluster bg-green-50 p-4 rounded-lg border-2 border-green-300">
-                <div class="node bg-white p-2 rounded mb-2 shadow">
+            <div class="bg-green-50 p-4 rounded-lg border-2 border-green-300 transition-all duration-300">
+                <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 1</h4>
-                    <div class="pods flex gap-2 mt-2">
-                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                    <div class="flex gap-2 mt-2">
+                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             Node.js Pod
                         </div>
-                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             DB Pod
                         </div>
                     </div>
                 </div>
-                <div class="node bg-white p-2 rounded mb-2 shadow">
+                <div class="bg-white p-2 rounded mb-2 shadow transition-all duration-300">
                     <h4 class="text-sm font-bold">Node 2</h4>
-                    <div class="pods flex gap-2 mt-2">
-                        <div class="pod bg-blue-200 p-2 rounded text-xs">
+                    <div class="flex gap-2 mt-2">
+                        <div class="bg-blue-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             Node.js Pod
                         </div>
-                        <div class="pod bg-orange-200 p-2 rounded text-xs">
+                        <div class="bg-orange-200 p-2 rounded text-xs transition-all duration-300 hover:scale-105">
                             DB Pod
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="status-indicator bg-gray-300"></div>
+            <div class="status-indicator absolute w-4 h-4 rounded-full right-3 top-3 bg-gray-300"></div>
         </div>
         
         <!-- Pipelines -->
-        <div class="pipeline" style="width: 100px; left: 300px; top: 125px;"></div>
-        <div class="pipeline" style="width: 100px; left: 800px; top: 125px;"></div>
+        <div class="absolute h-2.5 bg-gray-200 z-0" style="width: 100px; left: 300px; top: 125px;"></div>
+        <div class="absolute h-2.5 bg-gray-200 z-0" style="width: 100px; left: 800px; top: 125px;"></div>
         
         <!-- Quality Gates -->
-        <div id="gate1" class="gate" style="width: 50px; height: 50px; left: 325px; top: 100px;">
+        <div id="gate1" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 overflow-hidden" style="left: 325px; top: 100px;">
             QG1
         </div>
         
-        <div id="gate2" class="gate" style="width: 50px; height: 50px; left: 825px; top: 100px;">
+        <div id="gate2" class="absolute w-12 h-12 flex justify-center items-center text-white font-bold shadow-md z-10 bg-gray-600 overflow-hidden" style="left: 825px; top: 100px;">
             QG2
         </div>
         
         <!-- Container Registry -->
-        <div class="container-registry bg-purple-100 text-purple-800 p-4 rounded-lg border-2 border-purple-300" 
-             style="position: absolute; width: 150px; left: 525px; top: 400px;">
-            <h4 class="text-sm font-bold">Container Registry</h4>
-            <div class="images mt-2 text-xs">
-                <div class="image bg-white p-2 rounded mb-1">nodejs-app:latest</div>
-                <div class="image bg-white p-2 rounded">database:latest</div>
+        <div class="absolute bg-purple-100 text-purple-800 p-4 rounded-lg border-2 border-purple-300 transition-all duration-300" 
+             style="width: 150px; left: 525px; top: 400px;">
+            <h4 class="text-sm font-bold mb-2">Container Registry</h4>
+            <div class="space-y-1 text-xs">
+                <div class="bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50">nodejs-app:latest</div>
+                <div class="bg-white p-2 rounded transition-all duration-200 hover:translate-x-1 hover:bg-gray-50">database:latest</div>
             </div>
         </div>
         
         <!-- Gate Popups -->
-        <div id="gate1-popup" class="gate-popup" style="left: 350px; top: 260px;">
-            <h4 class="font-bold">Quality Gate 1</h4>
-            <ul>
+        <div id="gate1-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 350px; top: 260px;">
+            <h4 class="font-bold text-gray-800 mb-2">Quality Gate 1</h4>
+            <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
                 <li>Code review</li>
                 <li>Unit tests pass (>80%)</li>
                 <li>Static code analysis</li>
@@ -356,9 +156,9 @@
             </ul>
         </div>
         
-        <div id="gate2-popup" class="gate-popup" style="left: 700px; top: 260px;">
-            <h4 class="font-bold">Quality Gate 2</h4>
-            <ul>
+        <div id="gate2-popup" class="absolute bg-white border border-gray-200 rounded-lg p-4 shadow-lg z-20 hidden" style="left: 700px; top: 260px;">
+            <h4 class="font-bold text-gray-800 mb-2">Quality Gate 2</h4>
+            <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
                 <li>Integration tests pass</li>
                 <li>Performance tests</li>
                 <li>Security scan</li>
@@ -367,36 +167,40 @@
         </div>
         
         <!-- Controls -->
-        <div class="controls">
-            <button id="startBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        <div class="absolute bottom-5 left-1/2 transform -translate-x-1/2 z-10 flex gap-3">
+            <button id="startBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200">
                 Start Deployment
             </button>
-            <button id="resetBtn" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+            <button id="resetBtn" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200">
                 Reset
             </button>
         </div>
         
         <!-- Legend -->
-        <div class="legend">
+        <div class="absolute top-5 right-5 bg-white/90 rounded-lg p-4 shadow-md">
             <h4 class="font-bold mb-2">Legend</h4>
-            <div class="legend-item">
-                <div class="legend-color bg-blue-500"></div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-blue-500"></div>
                 <span>Code Package</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color bg-green-400"></div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-green-400"></div>
                 <span>Success</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color bg-red-500"></div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-red-500"></div>
                 <span>Failure</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color bg-yellow-400"></div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-yellow-400"></div>
                 <span>In Progress</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #6c757d;"></div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-gray-400"></div>
+                <span>Idle</span>
+            </div>
+            <div class="flex items-center mb-2">
+                <div class="w-4 h-4 mr-3 rounded bg-gray-600"></div>
                 <span>Quality Gate</span>
             </div>
         </div>
@@ -425,10 +229,10 @@
         resetBtn.addEventListener('click', resetDeployment);
         
         // Gate popup listeners
-        gate1.addEventListener('mouseenter', () => gate1Popup.style.display = 'block');
-        gate1.addEventListener('mouseleave', () => gate1Popup.style.display = 'none');
-        gate2.addEventListener('mouseenter', () => gate2Popup.style.display = 'block');
-        gate2.addEventListener('mouseleave', () => gate2Popup.style.display = 'none');
+        gate1.addEventListener('mouseenter', () => gate1Popup.classList.remove('hidden'));
+        gate1.addEventListener('mouseleave', () => gate1Popup.classList.add('hidden'));
+        gate2.addEventListener('mouseenter', () => gate2Popup.classList.remove('hidden'));
+        gate2.addEventListener('mouseleave', () => gate2Popup.classList.add('hidden'));
         
         // Initialize the state
         function init() {
@@ -447,10 +251,10 @@
             
             // Create code package
             codePackage = document.createElement('div');
-            codePackage.className = 'code-package';
+            codePackage.className = 'absolute w-8 h-8 bg-blue-600 rounded transition-all duration-500 shadow-md z-10';
             codePackage.style.left = (devStage.offsetLeft + devStage.offsetWidth / 2 - 15) + 'px';
             codePackage.style.top = (devStage.offsetTop + devStage.offsetHeight / 2 - 15) + 'px';
-            document.querySelector('.container').appendChild(codePackage);
+            document.querySelector('.relative').appendChild(codePackage);
             
             // Start the deployment flow
             updateStageStatus(devStage, 'processing');
@@ -460,31 +264,30 @@
         // Create container image
         function createContainerImage() {
             const image = document.createElement('div');
-            image.className = 'code-package';
-            image.style.backgroundColor = '#818cf8'; // Indigo-400
+            image.className = 'absolute w-8 h-8 bg-indigo-400 rounded transition-all duration-500 shadow-md z-10';
             return image;
         }
 
         // Deploy containers to Kubernetes
         function deployToKubernetes(stage, onComplete) {
             const container = createContainerImage();
-            document.querySelector('.container').appendChild(container);
+            document.querySelector('.relative').appendChild(container);
 
             // Move to registry first
-            const registry = document.querySelector('.container-registry');
+            const registry = document.querySelector('.bg-purple-100');
             container.style.left = (registry.offsetLeft + registry.offsetWidth / 2 - 15) + 'px';
             container.style.top = (registry.offsetTop + 20) + 'px';
 
             setTimeout(() => {
                 // Find target node in the stage
                 const targetStage = stage === 'test' ? testStage : prodStage;
-                const node = targetStage.querySelector('.node');
-                const pods = node.querySelectorAll('.pod');
+                const node = targetStage.querySelector('.bg-yellow-50, .bg-green-50');
+                const pods = node.querySelectorAll('.bg-blue-200, .bg-orange-200');
 
                 // Animate containers to pods
                 pods.forEach((pod, index) => {
                     const newContainer = createContainerImage();
-                    document.querySelector('.container').appendChild(newContainer);
+                    document.querySelector('.relative').appendChild(newContainer);
                     newContainer.style.left = container.style.left;
                     newContainer.style.top = container.style.top;
 
@@ -495,10 +298,10 @@
                         newContainer.style.transform = 'scale(0.5)';
 
                         setTimeout(() => {
-                            pod.style.backgroundColor = index === 0 ? '#93c5fd' : '#fdba74';
-                            pod.style.transform = 'scale(1.1)';
+                            pod.classList.remove('bg-white');
+                            pod.classList.add(index === 0 ? 'bg-blue-200' : 'bg-orange-200', 'scale-110');
                             setTimeout(() => {
-                                pod.style.transform = 'scale(1)';
+                                pod.classList.remove('scale-110');
                                 newContainer.remove();
                             }, 300);
                         }, 500);
@@ -533,23 +336,24 @@
         function updateStageStatus(element, status) {
             const indicator = element.querySelector('.status-indicator');
             
+            // Remove all possible status classes
+            indicator.classList.remove('bg-gray-300', 'bg-yellow-400', 'bg-green-400', 'bg-red-500', 'animate-pulse');
+            element.classList.remove('border-2', 'border-yellow-400', 'border-green-400', 'border-red-500', 'shadow-lg');
+            
             switch(status) {
                 case 'idle':
-                    indicator.className = 'status-indicator bg-gray-300';
-                    element.classList.remove('border-2', 'border-yellow-400', 'shadow-lg');
+                    indicator.classList.add('bg-gray-300');
                     break;
                 case 'processing':
-                    indicator.className = 'status-indicator bg-yellow-400 loading';
+                    indicator.classList.add('bg-yellow-400', 'animate-pulse');
                     element.classList.add('border-2', 'border-yellow-400', 'shadow-lg');
                     break;
                 case 'success':
-                    indicator.className = 'status-indicator bg-green-400';
-                    element.classList.remove('border-2', 'border-yellow-400');
+                    indicator.classList.add('bg-green-400');
                     element.classList.add('border-2', 'border-green-400', 'shadow-lg');
                     break;
                 case 'failure':
-                    indicator.className = 'status-indicator bg-red-500';
-                    element.classList.remove('border-2', 'border-yellow-400');
+                    indicator.classList.add('bg-red-500');
                     element.classList.add('border-2', 'border-red-500', 'shadow-lg');
                     break;
             }
@@ -580,13 +384,14 @@
         
         // Show a step label for a short duration
         function showStepLabel(gate, text, top) {
-            const existingLabel = gate.querySelector('.gate-step-label');
+            const existingLabel = gate.querySelector('[data-step-label]');
             if (existingLabel) {
                 existingLabel.remove();
             }
 
             const label = document.createElement('div');
-            label.className = 'gate-step-label';
+            label.className = 'absolute left-1/2 transform -translate-x-1/2 bg-white px-3 py-2 rounded text-sm shadow-md z-10 border border-gray-200 text-gray-700 whitespace-nowrap opacity-0 transition-all duration-300';
+            label.setAttribute('data-step-label', '');
             label.textContent = text;
             
             // Calculate position below the stage boxes
@@ -596,24 +401,22 @@
             
             const stageBottom = nearestStage.offsetTop + nearestStage.offsetHeight;
             label.style.top = (stageBottom + 20 + top) + 'px';
-            document.querySelector('.container').appendChild(label);
+            document.querySelector('.relative').appendChild(label);
             label.style.left = (gate.offsetLeft + gate.offsetWidth/2) + 'px';
             
             // Add success/failure styling
             if (text.includes('passed')) {
-                label.style.backgroundColor = '#d1fae5';
-                label.style.borderColor = '#6ee7b7';
-                label.style.color = '#065f46';
+                label.classList.add('bg-green-50', 'border-green-300', 'text-green-800');
             } else if (text.includes('failed')) {
-                label.style.backgroundColor = '#fee2e2';
-                label.style.borderColor = '#fca5a5';
-                label.style.color = '#991b1b';
+                label.classList.add('bg-red-50', 'border-red-300', 'text-red-800');
             }
 
             setTimeout(() => {
-                label.classList.add('show');
+                label.classList.remove('opacity-0');
+                label.classList.add('opacity-100');
                 setTimeout(() => {
-                    label.classList.remove('show');
+                    label.classList.remove('opacity-100');
+                    label.classList.add('opacity-0');
                     setTimeout(() => {
                         if (label.parentNode) {
                             label.parentNode.removeChild(label);
