@@ -13,9 +13,56 @@
             100% { transform: scale(1); }
         }
         .pulse { animation: pulse 2s infinite; }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .game-over.visible {
+            opacity: 1;
+        }
+
+        @keyframes explosion {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(2); opacity: 0.5; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .explosion-particle {
+            position: absolute;
+            background: #ff4444;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: explosion 1s forwards;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
+    <div id="game-over" class="game-over hidden">
+        <h1 class="text-6xl font-bold text-red-500 mb-8">GAME OVER</h1>
+        <div class="text-2xl text-white mb-8">
+            <p class="mb-4">Server Overloaded!</p>
+            <p>Final Score: <span id="final-score" class="text-yellow-400">0</span></p>
+            <p>Waves Survived: <span id="final-wave" class="text-blue-400">0</span></p>
+        </div>
+        <button id="restart-game" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-xl">
+            Play Again
+        </button>
+    </div>
+
     <div class="container mx-auto px-4 py-8">
         <!-- Header -->
         <header class="text-center mb-8">
@@ -212,6 +259,7 @@
         // Game State
         let gameState = {
             isAttackActive: false,
+            isGameOver: false,
             defenses: defenseConfigs,
             requestsPerSecond: 0,
             targetRequestsPerSecond: 0,
@@ -346,8 +394,13 @@
                     }
                 });
 
+                // Check for game over condition
+                if (gameState.serverLoad >= 100 && !gameState.isGameOver) {
+                    gameOver();
+                }
+
                 // Update score based on defense effectiveness
-                if (gameState.targetServerLoad < 50) {
+                if (gameState.targetServerLoad < 50 && !gameState.isGameOver) {
                     gameState.score += Math.floor(10 * (1 - gameState.targetServerLoad / 100));
                 }
 
@@ -510,6 +563,88 @@
             camera.updateProjectionMatrix();
             renderer.setSize(container.offsetWidth, 400);
         });
+
+        // Game Over Function
+        function gameOver() {
+            gameState.isGameOver = true;
+            gameState.isAttackActive = false;
+
+            // Create explosion effect
+            const container = document.getElementById('simulation-container');
+            const rect = container.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            // Create explosion particles
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'explosion-particle';
+                particle.style.left = `${centerX}px`;
+                particle.style.top = `${centerY}px`;
+                particle.style.transform = `rotate(${Math.random() * 360}deg)`;
+                document.body.appendChild(particle);
+
+                // Remove particles after animation
+                setTimeout(() => particle.remove(), 1000);
+            }
+
+            // Update final score and show game over screen
+            document.getElementById('final-score').textContent = gameState.score;
+            document.getElementById('final-wave').textContent = gameState.wave;
+            const gameOverScreen = document.getElementById('game-over');
+            gameOverScreen.classList.remove('hidden');
+            setTimeout(() => gameOverScreen.classList.add('visible'), 100);
+
+            // Clear all particles
+            gameState.particles.forEach(particle => {
+                scene.remove(particle.mesh);
+            });
+            gameState.particles = [];
+        }
+
+        // Restart Game Function
+        function restartGame() {
+            gameState = {
+                isAttackActive: false,
+                isGameOver: false,
+                defenses: JSON.parse(JSON.stringify(defenseConfigs)),
+                requestsPerSecond: 0,
+                targetRequestsPerSecond: 0,
+                serverLoad: 0,
+                targetServerLoad: 0,
+                particles: [],
+                lastUpdateTime: Date.now(),
+                score: 0,
+                wave: 1,
+                energy: 100,
+                currentAttack: '',
+                attackTypes: ['SYN Flood', 'HTTP Flood', 'DNS Amplification'],
+                nextAttackTime: 0,
+                attackDuration: 10000,
+                waveDuration: 30000
+            };
+
+            // Reset UI
+            document.getElementById('game-over').classList.remove('visible');
+            setTimeout(() => document.getElementById('game-over').classList.add('hidden'), 500);
+            document.getElementById('start-attack').textContent = 'Start DDoS Attack';
+            document.getElementById('start-attack').classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+            document.getElementById('start-attack').classList.add('bg-red-600', 'hover:bg-red-700');
+
+            // Reset defense buttons
+            ['rate-limiting', 'firewall', 'cdn'].forEach(defense => {
+                const button = document.getElementById(defense);
+                button.classList.remove('opacity-50');
+                button.querySelector('.cooldown-bar').style.transform = 'scaleX(0)';
+            });
+
+            // Clear event log
+            document.getElementById('event-log').innerHTML = '';
+            logEvent('Game restarted! Defend your server!');
+        }
+
+        // Add restart button listener
+        document.getElementById('restart-game').addEventListener('click', restartGame);
 
         // Start animation loop
         animate();
