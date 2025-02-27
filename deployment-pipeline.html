@@ -588,7 +588,14 @@
             const label = document.createElement('div');
             label.className = 'gate-step-label';
             label.textContent = text;
-            label.style.top = (gate.offsetHeight + 20 + top) + 'px';
+            
+            // Calculate position below the stage boxes
+            const nearestStage = gate.id === 'gate1' ? 
+                document.getElementById('test-stage') : 
+                document.getElementById('prod-stage');
+            
+            const stageBottom = nearestStage.offsetTop + nearestStage.offsetHeight;
+            label.style.top = (stageBottom + 20 + top) + 'px';
             document.querySelector('.container').appendChild(label);
             label.style.left = (gate.offsetLeft + gate.offsetWidth/2) + 'px';
             
@@ -631,7 +638,7 @@
 
             steps.forEach((step, index) => {
                 setTimeout(() => {
-                    showStepLabel(gate1, step.text, index * 30);
+                    showStepLabel(gate1, step.text, index * 25);
                 }, step.delay);
             });
             
@@ -706,7 +713,7 @@
 
             steps.forEach((step, index) => {
                 setTimeout(() => {
-                    showStepLabel(gate2, step.text, index * 30);
+                    showStepLabel(gate2, step.text, index * 25);
                 }, step.delay);
             });
             
