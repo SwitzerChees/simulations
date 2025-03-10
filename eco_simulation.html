@@ -725,34 +725,93 @@
             }
 
             createMesh() {
-                // Create a fancy plant shape
-                const geometry = new THREE.CylinderGeometry(0.1, 0.2, 0.1, 4);
-
-                // Create material with color variation
-                const material = new THREE.MeshStandardMaterial({
-                    color: getColorVariation(0x2f855a),
+                // Create a bush-like plant shape
+                // Base/stem
+                const stemGeometry = new THREE.CylinderGeometry(0.1, 0.15, 0.2, 5);
+                const stemMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x8B4513), // Brown stem
                     flatShading: true
                 });
 
-                // Create mesh
-                this.mesh = new THREE.Mesh(geometry, material);
-                this.mesh.position.set(this.position.x, 0, this.position.z);
+                // Create main mesh
+                this.mesh = new THREE.Mesh(stemGeometry, stemMaterial);
+                this.mesh.position.set(this.position.x, 0.1, this.position.z);
                 this.mesh.rotation.y = Math.random() * Math.PI;
 
                 // Add to scene
                 scene.add(this.mesh);
 
-                // Add top part (leaves)
-                const leafGeometry = new THREE.TetrahedronGeometry(0.3);
-                const leafMaterial = new THREE.MeshStandardMaterial({
-                    color: getColorVariation(0x38a169),
-                    flatShading: true
-                });
+                // Add foliage (multiple leaf clusters)
+                this.leafMesh = new THREE.Group();
 
-                this.leafMesh = new THREE.Mesh(leafGeometry, leafMaterial);
-                this.leafMesh.position.y = 0.2;
-                this.leafMesh.scale.set(0.1, 0.1, 0.1); // Start small
+                // Create 3-5 leaf clusters
+                const numClusters = randomInt(3, 5);
+                for (let i = 0; i < numClusters; i++) {
+                    const leafCluster = this.createLeafCluster();
+
+                    // Position around the stem
+                    const angle = (i / numClusters) * Math.PI * 2;
+                    const radius = 0.2;
+                    leafCluster.position.set(
+                        Math.cos(angle) * radius,
+                        0.2 + Math.random() * 0.1,
+                        Math.sin(angle) * radius
+                    );
+
+                    // Random rotation
+                    leafCluster.rotation.y = Math.random() * Math.PI;
+
+                    // Add to leaf group
+                    this.leafMesh.add(leafCluster);
+                }
+
+                // Start with small scale
+                this.leafMesh.scale.set(0.1, 0.1, 0.1);
                 this.mesh.add(this.leafMesh);
+            }
+
+            createLeafCluster() {
+                // Create a small cluster of leaves
+                const cluster = new THREE.Group();
+
+                // Base color with slight variations
+                const baseColor = getColorVariation(0x38a169);
+
+                // Add 3-6 leaves to the cluster
+                const numLeaves = randomInt(3, 6);
+                for (let i = 0; i < numLeaves; i++) {
+                    // Create a leaf (tetrahedron)
+                    const leafGeometry = new THREE.TetrahedronGeometry(0.3);
+                    const leafMaterial = new THREE.MeshStandardMaterial({
+                        color: getColorVariation(baseColor, 0.05),
+                        flatShading: true
+                    });
+
+                    const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+
+                    // Position around a center point
+                    const angle = (i / numLeaves) * Math.PI * 2;
+                    const radius = 0.1;
+                    leaf.position.set(
+                        Math.cos(angle) * radius,
+                        0,
+                        Math.sin(angle) * radius
+                    );
+
+                    // Random rotation and scale
+                    leaf.rotation.set(
+                        Math.random() * 0.5,
+                        Math.random() * Math.PI,
+                        Math.random() * 0.5
+                    );
+
+                    const scale = 0.7 + Math.random() * 0.6;
+                    leaf.scale.set(scale, scale, scale);
+
+                    cluster.add(leaf);
+                }
+
+                return cluster;
             }
 
             update() {
@@ -776,6 +835,22 @@
                     // Update visual size
                     const scale = this.growthStage * this.genes.maxSize;
                     this.leafMesh.scale.set(scale, scale, scale);
+
+                    // Also adjust the color to become more vibrant as it grows
+                    if (this.leafMesh.children) {
+                        this.leafMesh.children.forEach(cluster => {
+                            cluster.children.forEach(leaf => {
+                                // Gradually shift color from yellowish-green to deeper green
+                                const material = leaf.material;
+                                const greenIntensity = 0.5 + (this.growthStage * 0.5); // 0.5 to 1.0
+                                material.color.setRGB(
+                                    0.2 - (this.growthStage * 0.1), // Reduce red as it grows
+                                    greenIntensity,
+                                    0.2
+                                );
+                            });
+                        });
+                    }
                 }
             }
 
@@ -832,20 +907,78 @@
             }
 
             createMesh() {
-                // Create a fancy prey shape
-                const geometry = new THREE.ConeGeometry(0.5, 1, 5);
-                geometry.rotateX(Math.PI / 2);
+                // Create a sheep-like shape
+                this.mesh = new THREE.Group();
+                this.mesh.position.set(this.position.x, 0.5, this.position.z);
+                this.mesh.scale.set(this.genes.size, this.genes.size, this.genes.size);
 
-                // Create material with color variation
-                const material = new THREE.MeshStandardMaterial({
-                    color: getColorVariation(0x3182ce),
+                // Body - slightly elongated sphere
+                const bodyGeometry = new THREE.SphereGeometry(0.5, 8, 6);
+                bodyGeometry.scale(1, 0.8, 1.2);
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0xEEEEEE), // Off-white wool
+                    flatShading: true,
+                    roughness: 1.0
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                this.mesh.add(body);
+
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.25, 8, 6);
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0xDDDDDD), // Slightly darker than body
+                    flatShading: true
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.set(0, 0.2, 0.6); // Positioned at front of body
+                this.mesh.add(head);
+
+                // Ears (2 small flattened cones)
+                const earGeometry = new THREE.ConeGeometry(0.1, 0.2, 4);
+                earGeometry.scale(1, 1, 0.5); // Flatten
+                const earMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0xCCCCCC),
                     flatShading: true
                 });
 
-                // Create mesh
-                this.mesh = new THREE.Mesh(geometry, material);
-                this.mesh.position.set(this.position.x, 0.5, this.position.z);
-                this.mesh.scale.set(this.genes.size, this.genes.size, this.genes.size);
+                // Left ear
+                const leftEar = new THREE.Mesh(earGeometry, earMaterial);
+                leftEar.position.set(-0.15, 0.3, 0.6);
+                leftEar.rotation.set(Math.PI * 0.25, 0, -Math.PI * 0.25);
+                this.mesh.add(leftEar);
+
+                // Right ear
+                const rightEar = new THREE.Mesh(earGeometry, earMaterial);
+                rightEar.position.set(0.15, 0.3, 0.6);
+                rightEar.rotation.set(Math.PI * 0.25, 0, Math.PI * 0.25);
+                this.mesh.add(rightEar);
+
+                // Legs (4 cylinders)
+                const legGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.5, 4);
+                const legMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x888888), // Darker legs
+                    flatShading: true
+                });
+
+                // Front left leg
+                const frontLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
+                frontLeftLeg.position.set(-0.3, -0.4, 0.3);
+                this.mesh.add(frontLeftLeg);
+
+                // Front right leg
+                const frontRightLeg = new THREE.Mesh(legGeometry, legMaterial);
+                frontRightLeg.position.set(0.3, -0.4, 0.3);
+                this.mesh.add(frontRightLeg);
+
+                // Back left leg
+                const backLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
+                backLeftLeg.position.set(-0.3, -0.4, -0.3);
+                this.mesh.add(backLeftLeg);
+
+                // Back right leg
+                const backRightLeg = new THREE.Mesh(legGeometry, legMaterial);
+                backRightLeg.position.set(0.3, -0.4, -0.3);
+                this.mesh.add(backRightLeg);
 
                 // Add to scene
                 scene.add(this.mesh);
@@ -1000,41 +1133,101 @@
             }
 
             createMesh() {
-                // Create a fancy predator shape
-                const geometry = new THREE.DodecahedronGeometry(0.6);
-
-                // Create material with color variation
-                const material = new THREE.MeshStandardMaterial({
-                    color: getColorVariation(0xe53e3e),
-                    flatShading: true,
-                    metalness: 0.3,
-                    roughness: 0.7
-                });
-
-                // Create mesh
-                this.mesh = new THREE.Mesh(geometry, material);
+                // Create a wolf-like shape
+                this.mesh = new THREE.Group();
                 this.mesh.position.set(this.position.x, 0.6, this.position.z);
                 this.mesh.scale.set(this.genes.size, this.genes.size, this.genes.size);
 
-                // Add spikes
-                const spikeGeometry = new THREE.ConeGeometry(0.15, 0.4, 4);
-                const spikeMaterial = new THREE.MeshStandardMaterial({
-                    color: getColorVariation(0xc53030),
+                // Body - elongated and slightly larger than prey
+                const bodyGeometry = new THREE.SphereGeometry(0.5, 8, 6);
+                bodyGeometry.scale(1, 0.8, 1.4); // More elongated than sheep
+                const bodyMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x666666), // Gray wolf
+                    flatShading: true,
+                    roughness: 0.8
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                this.mesh.add(body);
+
+                // Head - more pointed than prey
+                const headGeometry = new THREE.SphereGeometry(0.3, 8, 6);
+                headGeometry.scale(0.8, 0.7, 1.2); // Elongated to form a snout
+                const headMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x555555), // Slightly darker than body
+                    flatShading: true
+                });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.set(0, 0.2, 0.7); // Positioned at front of body
+                this.mesh.add(head);
+
+                // Ears (2 pointed triangular shapes)
+                const earGeometry = new THREE.ConeGeometry(0.08, 0.25, 3);
+                const earMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x444444),
                     flatShading: true
                 });
 
-                // Add multiple spikes
-                for (let i = 0; i < 5; i++) {
-                    const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
-                    const angle = (i / 5) * Math.PI * 2;
-                    spike.position.set(
-                        Math.cos(angle) * 0.6,
-                        Math.sin(angle) * 0.6,
-                        0
-                    );
-                    spike.rotation.z = angle + Math.PI / 2;
-                    this.mesh.add(spike);
-                }
+                // Left ear
+                const leftEar = new THREE.Mesh(earGeometry, earMaterial);
+                leftEar.position.set(-0.15, 0.4, 0.6);
+                leftEar.rotation.set(Math.PI * 0.1, 0, -Math.PI * 0.1);
+                this.mesh.add(leftEar);
+
+                // Right ear
+                const rightEar = new THREE.Mesh(earGeometry, earMaterial);
+                rightEar.position.set(0.15, 0.4, 0.6);
+                rightEar.rotation.set(Math.PI * 0.1, 0, Math.PI * 0.1);
+                this.mesh.add(rightEar);
+
+                // Snout - to make the face more wolf-like
+                const snoutGeometry = new THREE.ConeGeometry(0.15, 0.3, 4);
+                snoutGeometry.rotateX(-Math.PI / 2);
+                const snoutMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x333333),
+                    flatShading: true
+                });
+                const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
+                snout.position.set(0, 0.1, 1.0);
+                this.mesh.add(snout);
+
+                // Legs (4 cylinders) - longer than prey
+                const legGeometry = new THREE.CylinderGeometry(0.07, 0.07, 0.6, 4);
+                const legMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x444444), // Darker legs
+                    flatShading: true
+                });
+
+                // Front left leg
+                const frontLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
+                frontLeftLeg.position.set(-0.3, -0.4, 0.4);
+                this.mesh.add(frontLeftLeg);
+
+                // Front right leg
+                const frontRightLeg = new THREE.Mesh(legGeometry, legMaterial);
+                frontRightLeg.position.set(0.3, -0.4, 0.4);
+                this.mesh.add(frontRightLeg);
+
+                // Back left leg
+                const backLeftLeg = new THREE.Mesh(legGeometry, legMaterial);
+                backLeftLeg.position.set(-0.3, -0.4, -0.4);
+                this.mesh.add(backLeftLeg);
+
+                // Back right leg
+                const backRightLeg = new THREE.Mesh(legGeometry, legMaterial);
+                backRightLeg.position.set(0.3, -0.4, -0.4);
+                this.mesh.add(backRightLeg);
+
+                // Tail
+                const tailGeometry = new THREE.CylinderGeometry(0.08, 0.02, 0.5, 4);
+                tailGeometry.translate(0, -0.25, 0);
+                tailGeometry.rotateX(Math.PI / 4);
+                const tailMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x555555),
+                    flatShading: true
+                });
+                const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+                tail.position.set(0, 0, -0.7);
+                this.mesh.add(tail);
 
                 // Add to scene
                 scene.add(this.mesh);
