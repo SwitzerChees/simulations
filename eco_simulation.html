@@ -102,6 +102,16 @@
                         <input type="range" id="mutation-rate" min="0" max="100" value="10" class="w-full">
                         <div class="text-right text-xs"><span id="mutation-rate-value">10</span>%</div>
                     </div>
+                    <div>
+                        <label for="plant-limit-factor" class="block text-sm">Plant Limit Factor</label>
+                        <input type="range" id="plant-limit-factor" min="1" max="10" value="3" class="w-full">
+                        <div class="text-right text-xs"><span id="plant-limit-value">3</span>x</div>
+                    </div>
+                    <div>
+                        <label for="prey-limit-factor" class="block text-sm">Prey Limit Factor</label>
+                        <input type="range" id="prey-limit-factor" min="1" max="10" value="5" class="w-full">
+                        <div class="text-right text-xs"><span id="prey-limit-value">5</span>x</div>
+                    </div>
                 </div>
                 <button id="apply-config"
                     class="mt-2 bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded w-full">Apply</button>
@@ -263,6 +273,14 @@
             document.getElementById('mutation-rate').addEventListener('input', function (e) {
                 mutationRate = parseInt(e.target.value) / 100;
                 document.getElementById('mutation-rate-value').textContent = e.target.value;
+            });
+
+            document.getElementById('plant-limit-factor').addEventListener('input', function (e) {
+                document.getElementById('plant-limit-value').textContent = e.target.value;
+            });
+
+            document.getElementById('prey-limit-factor').addEventListener('input', function (e) {
+                document.getElementById('prey-limit-value').textContent = e.target.value;
             });
 
             // Add keyboard controls
@@ -481,11 +499,15 @@
             updateEntities();
 
             // Occasionally add new plants
-            if (Math.random() < 0.1 && entities.plants.length < parseInt(document.getElementById('initial-plants').value) * 2) {
+            const maxPlants = parseInt(document.getElementById('initial-plants').value) * 2;
+            if (Math.random() < 0.1 && entities.plants.length < maxPlants) {
                 const pos = getRandomPosition();
                 const plant = new Plant(pos.x, pos.z);
                 entities.plants.push(plant);
             }
+
+            // Apply population limits
+            applyPopulationLimits();
 
             // Update statistics
             updateStats();
@@ -498,6 +520,33 @@
 
             // Schedule next step based on simulation speed
             setTimeout(runSimulation, 1000 / simulationSpeed);
+        }
+
+        // Apply population limits to prevent overpopulation
+        function applyPopulationLimits() {
+            // Get configuration values for limits
+            const maxPlants = parseInt(document.getElementById('initial-plants').value) * parseInt(document.getElementById('plant-limit-factor').value);
+            const maxPrey = parseInt(document.getElementById('initial-prey').value) * parseInt(document.getElementById('prey-limit-factor').value);
+
+            // Limit plants - remove random plants if over limit
+            if (entities.plants.length > maxPlants) {
+                // Sort by age and remove oldest
+                entities.plants.sort((a, b) => b.age - a.age);
+                while (entities.plants.length > maxPlants) {
+                    const plant = entities.plants.shift();
+                    plant.die();
+                }
+            }
+
+            // Limit prey - remove weakest prey if over limit
+            if (entities.prey.length > maxPrey) {
+                // Sort by energy and remove weakest
+                entities.prey.sort((a, b) => a.energy - b.energy);
+                while (entities.prey.length > maxPrey) {
+                    const prey = entities.prey.shift();
+                    prey.die();
+                }
+            }
         }
 
         // Update all entities
@@ -883,9 +932,10 @@
                     target.position.x - this.position.x
                 );
 
-                // Move in that direction
-                this.position.x += Math.cos(this.direction) * this.genes.speed;
-                this.position.z += Math.sin(this.direction) * this.genes.speed;
+                // Move in that direction - move faster when hunting
+                const huntingSpeedBoost = 1.3; // 30% speed boost when hunting
+                this.position.x += Math.cos(this.direction) * this.genes.speed * huntingSpeedBoost;
+                this.position.z += Math.sin(this.direction) * this.genes.speed * huntingSpeedBoost;
             }
 
             fleeFrom(threat) {
@@ -937,14 +987,14 @@
 
             generateRandomGenes() {
                 return {
-                    speed: randomFloat(0.15, 0.35),
-                    visionRange: randomFloat(10, 20),
-                    metabolismRate: randomFloat(0.2, 0.5),
-                    attackStrength: randomFloat(10, 30),
-                    reproductionThreshold: randomFloat(200, 300),
-                    reproductionCost: randomFloat(80, 150),
-                    maxEnergy: randomFloat(300, 500),
-                    maxAge: randomInt(300, 600),
+                    speed: randomFloat(0.2, 0.4),           // Increased speed range
+                    visionRange: randomFloat(15, 25),       // Increased vision range
+                    metabolismRate: randomFloat(0.15, 0.4), // Slightly reduced metabolism
+                    attackStrength: randomFloat(15, 40),    // Increased attack strength
+                    reproductionThreshold: randomFloat(180, 280), // Slightly lower reproduction threshold
+                    reproductionCost: randomFloat(70, 130),
+                    maxEnergy: randomFloat(350, 550),       // Increased max energy
+                    maxAge: randomInt(350, 650),            // Increased lifespan
                     size: randomFloat(0.8, 1.5)
                 };
             }
@@ -1050,9 +1100,10 @@
                     target.position.x - this.position.x
                 );
 
-                // Move in that direction
-                this.position.x += Math.cos(this.direction) * this.genes.speed;
-                this.position.z += Math.sin(this.direction) * this.genes.speed;
+                // Move in that direction - move faster when hunting
+                const huntingSpeedBoost = 1.3; // 30% speed boost when hunting
+                this.position.x += Math.cos(this.direction) * this.genes.speed * huntingSpeedBoost;
+                this.position.z += Math.sin(this.direction) * this.genes.speed * huntingSpeedBoost;
             }
 
             moveRandomly() {
