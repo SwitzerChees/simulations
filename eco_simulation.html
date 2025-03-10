@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecological Simulation</title>
+
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Three.js via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white">
+    <div class="flex h-screen">
+        <!-- Main simulation canvas -->
+        <div id="simulation-container" class="flex-grow relative">
+            <div id="canvas-container"></div>
+        </div>
+
+        <!-- Control panel -->
+        <div class="w-80 bg-gray-800 p-4 overflow-y-auto">
+            <h1 class="text-2xl font-bold mb-4">Eco Simulation</h1>
+
+            <!-- Simulation controls -->
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-2">Controls</h2>
+                <div class="flex space-x-2 mb-2">
+                    <button id="start-btn" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded">Start</button>
+                    <button id="pause-btn" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded">Pause</button>
+                    <button id="reset-btn" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded">Reset</button>
+                </div>
+                <div class="mb-2">
+                    <label for="speed-slider" class="block mb-1">Simulation Speed</label>
+                    <input type="range" id="speed-slider" min="1" max="10" value="1" class="w-full">
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-2">Statistics</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-gray-700 p-2 rounded">
+                        <div class="text-sm text-gray-400">Plants</div>
+                        <div id="plant-count" class="text-lg font-bold text-green-400">0</div>
+                    </div>
+                    <div class="bg-gray-700 p-2 rounded">
+                        <div class="text-sm text-gray-400">Prey</div>
+                        <div id="prey-count" class="text-lg font-bold text-blue-400">0</div>
+                    </div>
+                    <div class="bg-gray-700 p-2 rounded">
+                        <div class="text-sm text-gray-400">Predators</div>
+                        <div id="predator-count" class="text-lg font-bold text-red-400">0</div>
+                    </div>
+                    <div class="bg-gray-700 p-2 rounded">
+                        <div class="text-sm text-gray-400">Generation</div>
+                        <div id="generation-count" class="text-lg font-bold">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration -->
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-2">Configuration</h2>
+                <div class="space-y-2">
+                    <div>
+                        <label for="grid-size" class="block text-sm">Grid Size</label>
+                        <input type="number" id="grid-size" value="50" min="10" max="200"
+                            class="bg-gray-700 rounded px-2 py-1 w-full">
+                    </div>
+                    <div>
+                        <label for="initial-plants" class="block text-sm">Initial Plants</label>
+                        <input type="number" id="initial-plants" value="100" min="0" max="1000"
+                            class="bg-gray-700 rounded px-2 py-1 w-full">
+                    </div>
+                    <div>
+                        <label for="initial-prey" class="block text-sm">Initial Prey</label>
+                        <input type="number" id="initial-prey" value="20" min="0" max="500"
+                            class="bg-gray-700 rounded px-2 py-1 w-full">
+                    </div>
+                    <div>
+                        <label for="initial-predators" class="block text-sm">Initial Predators</label>
+                        <input type="number" id="initial-predators" value="5" min="0" max="100"
+                            class="bg-gray-700 rounded px-2 py-1 w-full">
+                    </div>
+                    <div>
+                        <label for="mutation-rate" class="block text-sm">Mutation Rate</label>
+                        <input type="range" id="mutation-rate" min="0" max="100" value="10" class="w-full">
+                        <div class="text-right text-xs"><span id="mutation-rate-value">10</span>%</div>
+                    </div>
+                </div>
+                <button id="apply-config"
+                    class="mt-2 bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded w-full">Apply</button>
+            </div>
+
+            <!-- Instructions -->
+            <div class="text-xs text-gray-400">
+                <p class="mb-1"><strong>Controls:</strong> Zoom with mouse wheel, pan with right-click drag</p>
+                <p>WASD or arrow keys to move around</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let scene, camera, renderer, controls;
+        let grid = [];
+        let entities = {
+            plants: [],
+            prey: [],
+            predators: []
+        };
+        let gridSize = 50;
+        let cellSize = 1;
+        let simulationRunning = false;
+        let simulationSpeed = 1;
+        let generationCount = 0;
+        let mutationRate = 0.1;
+
+        // Initialize Three.js scene
+        function initScene() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827); // Dark background
+
+            // Create camera (orthographic for 2D-like view)
+            const aspect = window.innerWidth / window.innerHeight;
+            const frustumSize = 100;
+            camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 50, 0);
+            camera.lookAt(0, 0, 0);
+            camera.rotation.z = 0;
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth - 320, window.innerHeight); // Account for sidebar
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Add orbit controls - using the correct import path
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableRotate = false; // Disable rotation for top-down view
+            controls.screenSpacePanning = true;
+            controls.minZoom = 0.5;
+            controls.maxZoom = 5;
+            controls.update();
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            scene.add(directionalLight);
+
+            // Create grid
+            createGrid();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Create grid of cells
+        function createGrid() {
+            // Remove existing grid if any
+            if (grid.length > 0) {
+                grid.forEach(line => scene.remove(line));
+                grid = [];
+            }
+
+            // Create grid lines
+            const gridGeometry = new THREE.GridHelper(
+                gridSize * cellSize,
+                gridSize,
+                0x444444,
+                0x222222
+            );
+            gridGeometry.rotation.x = Math.PI / 2; // Rotate to XY plane
+            gridGeometry.position.y = -0.01; // Slightly below entities
+            scene.add(gridGeometry);
+            grid.push(gridGeometry);
+
+            // Create ground plane
+            const groundGeometry = new THREE.PlaneGeometry(gridSize * cellSize, gridSize * cellSize);
+            const groundMaterial = new THREE.MeshBasicMaterial({
+                color: 0x1a202c,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = Math.PI / 2;
+            ground.position.y = -0.02;
+            scene.add(ground);
+            grid.push(ground);
+
+            // Add grid boundary
+            const borderGeometry = new THREE.EdgesGeometry(
+                new THREE.BoxGeometry(gridSize * cellSize, 0.1, gridSize * cellSize)
+            );
+            const borderMaterial = new THREE.LineBasicMaterial({ color: 0x6366f1 });
+            const border = new THREE.LineSegments(borderGeometry, borderMaterial);
+            scene.add(border);
+            grid.push(border);
+        }
+
+        // Handle window resize
+        function onWindowResize() {
+            const aspect = (window.innerWidth - 320) / window.innerHeight;
+            const frustumSize = 100;
+
+            camera.left = frustumSize * aspect / -2;
+            camera.right = frustumSize * aspect / 2;
+            camera.top = frustumSize / 2;
+            camera.bottom = frustumSize / -2;
+
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth - 320, window.innerHeight);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize the application
+        function init() {
+            initScene();
+            animate();
+
+            // Initialize UI event listeners
+            document.getElementById('start-btn').addEventListener('click', startSimulation);
+            document.getElementById('pause-btn').addEventListener('click', pauseSimulation);
+            document.getElementById('reset-btn').addEventListener('click', resetSimulation);
+            document.getElementById('apply-config').addEventListener('click', applyConfiguration);
+
+            document.getElementById('speed-slider').addEventListener('input', function (e) {
+                simulationSpeed = parseInt(e.target.value);
+            });
+
+            document.getElementById('mutation-rate').addEventListener('input', function (e) {
+                mutationRate = parseInt(e.target.value) / 100;
+                document.getElementById('mutation-rate-value').textContent = e.target.value;
+            });
+
+            // Add keyboard controls
+            window.addEventListener('keydown', handleKeyDown);
+
+            // Initialize simulation with default values
+            applyConfiguration();
+
+            // Add info overlay
+            createInfoOverlay();
+        }
+
+        // Handle keyboard controls
+        function handleKeyDown(event) {
+            const moveSpeed = 2;
+            const key = event.key.toLowerCase();
+
+            switch (key) {
+                case 'w':
+                case 'arrowup':
+                    camera.position.z -= moveSpeed;
+                    break;
+                case 's':
+                case 'arrowdown':
+                    camera.position.z += moveSpeed;
+                    break;
+                case 'a':
+                case 'arrowleft':
+                    camera.position.x -= moveSpeed;
+                    break;
+                case 'd':
+                case 'arrowright':
+                    camera.position.x += moveSpeed;
+                    break;
+                case '+':
+                case '=':
+                    // Zoom in
+                    camera.zoom += 0.1;
+                    camera.updateProjectionMatrix();
+                    break;
+                case '-':
+                case '_':
+                    // Zoom out
+                    camera.zoom -= 0.1;
+                    camera.zoom = Math.max(0.1, camera.zoom);
+                    camera.updateProjectionMatrix();
+                    break;
+                case ' ':
+                    // Toggle simulation
+                    if (simulationRunning) {
+                        pauseSimulation();
+                    } else {
+                        startSimulation();
+                    }
+                    break;
+                case 'r':
+                    // Reset simulation
+                    resetSimulation();
+                    break;
+            }
+        }
+
+        // Start the simulation
+        function startSimulation() {
+            if (!simulationRunning) {
+                simulationRunning = true;
+                runSimulation();
+            }
+        }
+
+        // Pause the simulation
+        function pauseSimulation() {
+            simulationRunning = false;
+        }
+
+        // Reset the simulation
+        function resetSimulation() {
+            pauseSimulation();
+            clearEntities();
+            generationCount = 0;
+            updateStats();
+            applyConfiguration();
+        }
+
+        // Clear all entities
+        function clearEntities() {
+            // Remove all entities from scene
+            entities.plants.forEach(plant => scene.remove(plant.mesh));
+            entities.prey.forEach(prey => scene.remove(prey.mesh));
+            entities.predators.forEach(predator => scene.remove(predator.mesh));
+
+            // Clear entity arrays
+            entities.plants = [];
+            entities.prey = [];
+            entities.predators = [];
+        }
+
+        // Create information overlay
+        function createInfoOverlay() {
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute bottom-4 left-4 bg-gray-800 bg-opacity-80 p-3 rounded text-xs text-white';
+            overlay.innerHTML = `
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
+                        <span>Plants</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
+                        <span>Prey</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-red-500 mr-1"></div>
+                        <span>Predators</span>
+                    </div>
+                </div>
+                <div class="mt-1">
+                    <span class="text-gray-400">Press Space to toggle simulation, R to reset</span>
+                </div>
+            `;
+            document.getElementById('simulation-container').appendChild(overlay);
+        }
+
+        // Add debug info display
+        function updateDebugInfo() {
+            // Calculate average traits
+            let avgPlantGrowth = 0;
+            let avgPreySpeed = 0;
+            let avgPredatorSpeed = 0;
+
+            if (entities.plants.length > 0) {
+                avgPlantGrowth = entities.plants.reduce((sum, plant) => sum + plant.genes.growthRate, 0) / entities.plants.length;
+            }
+
+            if (entities.prey.length > 0) {
+                avgPreySpeed = entities.prey.reduce((sum, prey) => sum + prey.genes.speed, 0) / entities.prey.length;
+            }
+
+            if (entities.predators.length > 0) {
+                avgPredatorSpeed = entities.predators.reduce((sum, predator) => sum + predator.genes.speed, 0) / entities.predators.length;
+            }
+
+            // Update debug info
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                debugInfo.innerHTML = `
+                    <div>Avg Plant Growth: ${avgPlantGrowth.toFixed(3)}</div>
+                    <div>Avg Prey Speed: ${avgPreySpeed.toFixed(3)}</div>
+                    <div>Avg Predator Speed: ${avgPredatorSpeed.toFixed(3)}</div>
+                `;
+            }
+        }
+
+        // Add debug info section to UI
+        function addDebugInfo() {
+            const debugSection = document.createElement('div');
+            debugSection.className = 'mb-6';
+            debugSection.innerHTML = `
+                <h2 class="text-xl font-semibold mb-2">Evolution Stats</h2>
+                <div id="debug-info" class="bg-gray-700 p-2 rounded text-sm">
+                    <div>Avg Plant Growth: 0.000</div>
+                    <div>Avg Prey Speed: 0.000</div>
+                    <div>Avg Predator Speed: 0.000</div>
+                </div>
+            `;
+
+            // Insert after statistics section
+            const statsSection = document.querySelector('.mb-6:nth-child(2)');
+            statsSection.parentNode.insertBefore(debugSection, statsSection.nextSibling);
+        }
+
+        // Update statistics display
+        function updateStats() {
+            document.getElementById('plant-count').textContent = entities.plants.length;
+            document.getElementById('prey-count').textContent = entities.prey.length;
+            document.getElementById('predator-count').textContent = entities.predators.length;
+            document.getElementById('generation-count').textContent = generationCount;
+
+            // Update debug info if it exists
+            if (document.getElementById('debug-info')) {
+                updateDebugInfo();
+            }
+        }
+
+        // Apply configuration settings
+        function applyConfiguration() {
+            // Get configuration values
+            gridSize = parseInt(document.getElementById('grid-size').value);
+            const initialPlants = parseInt(document.getElementById('initial-plants').value);
+            const initialPrey = parseInt(document.getElementById('initial-prey').value);
+            const initialPredators = parseInt(document.getElementById('initial-predators').value);
+
+            // Recreate grid with new size
+            createGrid();
+
+            // Clear existing entities
+            clearEntities();
+
+            // Initialize entities
+            initializeEntities(initialPlants, initialPrey, initialPredators);
+
+            // Add debug info if not already added
+            if (!document.getElementById('debug-info')) {
+                addDebugInfo();
+            }
+
+            // Update statistics
+            updateStats();
+        }
+
+        // Run the simulation loop
+        function runSimulation() {
+            if (!simulationRunning) return;
+
+            // Update all entities
+            updateEntities();
+
+            // Occasionally add new plants
+            if (Math.random() < 0.1 && entities.plants.length < parseInt(document.getElementById('initial-plants').value) * 2) {
+                const pos = getRandomPosition();
+                const plant = new Plant(pos.x, pos.z);
+                entities.plants.push(plant);
+            }
+
+            // Update statistics
+            updateStats();
+
+            // Check for simulation reset conditions
+            if (entities.prey.length === 0 && entities.predators.length === 0) {
+                generationCount++;
+                resetSimulation();
+            }
+
+            // Schedule next step based on simulation speed
+            setTimeout(runSimulation, 1000 / simulationSpeed);
+        }
+
+        // Update all entities
+        function updateEntities() {
+            // Update plants
+            entities.plants.forEach(plant => plant.update());
+            entities.plants = entities.plants.filter(plant => plant.alive);
+
+            // Update prey
+            entities.prey.forEach(prey => prey.update());
+            entities.prey = entities.prey.filter(prey => prey.alive);
+
+            // Update predators
+            entities.predators.forEach(predator => predator.update());
+            entities.predators = entities.predators.filter(predator => predator.alive);
+        }
+
+        // Utility function to get random position on grid
+        function getRandomPosition() {
+            const halfGrid = (gridSize * cellSize) / 2;
+            return {
+                x: Math.random() * gridSize * cellSize - halfGrid,
+                z: Math.random() * gridSize * cellSize - halfGrid
+            };
+        }
+
+        // Utility function to get random float between min and max
+        function randomFloat(min, max) {
+            return min + Math.random() * (max - min);
+        }
+
+        // Utility function to get random integer between min and max (inclusive)
+        function randomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Utility function to calculate distance between two positions
+        function distance(pos1, pos2) {
+            return Math.sqrt(
+                Math.pow(pos1.x - pos2.x, 2) +
+                Math.pow(pos1.z - pos2.z, 2)
+            );
+        }
+
+        // Utility function to get random color variation
+        function getColorVariation(baseColor, variation = 0.1) {
+            const color = new THREE.Color(baseColor);
+            color.r += randomFloat(-variation, variation);
+            color.g += randomFloat(-variation, variation);
+            color.b += randomFloat(-variation, variation);
+            return color;
+        }
+
+        // Base Entity class
+        class Entity {
+            constructor(x, z, genes = null) {
+                // Position
+                this.position = { x, z };
+
+                // Basic properties
+                this.age = 0;
+                this.energy = 100;
+                this.alive = true;
+
+                // Genetic traits (default or inherited)
+                this.genes = genes || this.generateRandomGenes();
+
+                // Three.js mesh
+                this.mesh = null;
+            }
+
+            generateRandomGenes() {
+                // Override in subclasses
+                return {};
+            }
+
+            update() {
+                if (!this.alive) return;
+
+                // Age increases each tick
+                this.age++;
+
+                // Energy decreases over time
+                this.energy -= this.genes.metabolismRate;
+
+                // Check if entity should die
+                if (this.energy <= 0 || this.age >= this.genes.maxAge) {
+                    this.die();
+                }
+
+                // Update mesh position
+                if (this.mesh) {
+                    this.mesh.position.x = this.position.x;
+                    this.mesh.position.z = this.position.z;
+                }
+            }
+
+            die() {
+                this.alive = false;
+                if (this.mesh) {
+                    scene.remove(this.mesh);
+                }
+            }
+
+            // Check if entity is within grid bounds
+            isInBounds() {
+                const halfGrid = (gridSize * cellSize) / 2;
+                return (
+                    this.position.x >= -halfGrid &&
+                    this.position.x <= halfGrid &&
+                    this.position.z >= -halfGrid &&
+                    this.position.z <= halfGrid
+                );
+            }
+
+            // Keep entity within grid bounds
+            keepInBounds() {
+                const halfGrid = (gridSize * cellSize) / 2 - 0.5;
+                this.position.x = Math.max(-halfGrid, Math.min(halfGrid, this.position.x));
+                this.position.z = Math.max(-halfGrid, Math.min(halfGrid, this.position.z));
+            }
+
+            // Create offspring with potential mutations
+            reproduce(EntityClass) {
+                // Create offspring with parent genes
+                const childGenes = JSON.parse(JSON.stringify(this.genes));
+
+                // Apply mutations
+                for (const gene in childGenes) {
+                    if (Math.random() < mutationRate) {
+                        // Apply a small random change to the gene
+                        const mutationFactor = randomFloat(0.8, 1.2);
+                        childGenes[gene] *= mutationFactor;
+                    }
+                }
+
+                // Create new entity with mutated genes
+                const offsetX = randomFloat(-1, 1);
+                const offsetZ = randomFloat(-1, 1);
+                const child = new EntityClass(
+                    this.position.x + offsetX,
+                    this.position.z + offsetZ,
+                    childGenes
+                );
+
+                // Reduce parent's energy
+                this.energy -= this.genes.reproductionCost;
+
+                return child;
+            }
+        }
+
+        // Plant class
+        class Plant extends Entity {
+            constructor(x, z, genes = null) {
+                super(x, z, genes);
+
+                // Create mesh
+                this.createMesh();
+
+                // Set initial growth stage
+                this.growthStage = 0;
+            }
+
+            generateRandomGenes() {
+                return {
+                    growthRate: randomFloat(0.05, 0.2),
+                    maxSize: randomFloat(0.5, 1.5),
+                    spreadChance: randomFloat(0.01, 0.05),
+                    spreadDistance: randomFloat(2, 5),
+                    energyValue: randomFloat(20, 40),
+                    maxAge: randomInt(50, 150),
+                    reproductionCost: randomFloat(10, 20),
+                    metabolismRate: 0 // Plants don't consume energy over time
+                };
+            }
+
+            createMesh() {
+                // Create a fancy plant shape
+                const geometry = new THREE.CylinderGeometry(0.1, 0.2, 0.1, 4);
+
+                // Create material with color variation
+                const material = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x2f855a),
+                    flatShading: true
+                });
+
+                // Create mesh
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.set(this.position.x, 0, this.position.z);
+                this.mesh.rotation.y = Math.random() * Math.PI;
+
+                // Add to scene
+                scene.add(this.mesh);
+
+                // Add top part (leaves)
+                const leafGeometry = new THREE.TetrahedronGeometry(0.3);
+                const leafMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x38a169),
+                    flatShading: true
+                });
+
+                this.leafMesh = new THREE.Mesh(leafGeometry, leafMaterial);
+                this.leafMesh.position.y = 0.2;
+                this.leafMesh.scale.set(0.1, 0.1, 0.1); // Start small
+                this.mesh.add(this.leafMesh);
+            }
+
+            update() {
+                super.update();
+                if (!this.alive) return;
+
+                // Grow
+                this.grow();
+
+                // Try to spread if mature
+                if (this.isFullyGrown() && Math.random() < this.genes.spreadChance) {
+                    this.spread();
+                }
+            }
+
+            grow() {
+                if (this.growthStage < 1) {
+                    this.growthStage += this.genes.growthRate;
+                    this.growthStage = Math.min(this.growthStage, 1);
+
+                    // Update visual size
+                    const scale = this.growthStage * this.genes.maxSize;
+                    this.leafMesh.scale.set(scale, scale, scale);
+                }
+            }
+
+            isFullyGrown() {
+                return this.growthStage >= 1;
+            }
+
+            spread() {
+                // Calculate random direction and distance
+                const angle = Math.random() * Math.PI * 2;
+                const distance = this.genes.spreadDistance * Math.random();
+
+                // Calculate new position
+                const newX = this.position.x + Math.cos(angle) * distance;
+                const newZ = this.position.z + Math.sin(angle) * distance;
+
+                // Create new plant
+                const newPlant = new Plant(newX, newZ, JSON.parse(JSON.stringify(this.genes)));
+
+                // Check if new plant is within bounds
+                if (newPlant.isInBounds()) {
+                    entities.plants.push(newPlant);
+                } else {
+                    // Remove if out of bounds
+                    newPlant.die();
+                }
+            }
+        }
+
+        // Prey class
+        class Prey extends Entity {
+            constructor(x, z, genes = null) {
+                super(x, z, genes);
+
+                // Create mesh
+                this.createMesh();
+
+                // Movement properties
+                this.direction = Math.random() * Math.PI * 2;
+                this.targetPosition = null;
+            }
+
+            generateRandomGenes() {
+                return {
+                    speed: randomFloat(0.1, 0.3),
+                    visionRange: randomFloat(5, 15),
+                    metabolismRate: randomFloat(0.1, 0.3),
+                    reproductionThreshold: randomFloat(150, 250),
+                    reproductionCost: randomFloat(50, 100),
+                    maxEnergy: randomFloat(200, 400),
+                    maxAge: randomInt(200, 500),
+                    size: randomFloat(0.6, 1.2)
+                };
+            }
+
+            createMesh() {
+                // Create a fancy prey shape
+                const geometry = new THREE.ConeGeometry(0.5, 1, 5);
+                geometry.rotateX(Math.PI / 2);
+
+                // Create material with color variation
+                const material = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0x3182ce),
+                    flatShading: true
+                });
+
+                // Create mesh
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.set(this.position.x, 0.5, this.position.z);
+                this.mesh.scale.set(this.genes.size, this.genes.size, this.genes.size);
+
+                // Add to scene
+                scene.add(this.mesh);
+            }
+
+            update() {
+                super.update();
+                if (!this.alive) return;
+
+                // Find nearest plant and predator
+                const nearestPlant = this.findNearestPlant();
+                const nearestPredator = this.findNearestPredator();
+
+                // Decide movement based on surroundings
+                if (nearestPredator && distance(this.position, nearestPredator.position) < this.genes.visionRange) {
+                    // Run away from predator
+                    this.fleeFrom(nearestPredator);
+                } else if (nearestPlant && distance(this.position, nearestPlant.position) < this.genes.visionRange) {
+                    // Move toward plant
+                    this.moveToward(nearestPlant);
+
+                    // Eat plant if close enough
+                    if (distance(this.position, nearestPlant.position) < 1) {
+                        this.eat(nearestPlant);
+                    }
+                } else {
+                    // Random movement
+                    this.moveRandomly();
+                }
+
+                // Keep within bounds
+                this.keepInBounds();
+
+                // Update mesh rotation to face movement direction
+                if (this.mesh) {
+                    this.mesh.rotation.y = this.direction;
+                }
+
+                // Try to reproduce if enough energy
+                if (this.energy > this.genes.reproductionThreshold) {
+                    const child = this.reproduce(Prey);
+                    entities.prey.push(child);
+                }
+            }
+
+            findNearestPlant() {
+                let nearest = null;
+                let minDistance = Infinity;
+
+                for (const plant of entities.plants) {
+                    if (plant.alive && plant.isFullyGrown()) {
+                        const dist = distance(this.position, plant.position);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            nearest = plant;
+                        }
+                    }
+                }
+
+                return nearest;
+            }
+
+            findNearestPredator() {
+                let nearest = null;
+                let minDistance = Infinity;
+
+                for (const predator of entities.predators) {
+                    if (predator.alive) {
+                        const dist = distance(this.position, predator.position);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            nearest = predator;
+                        }
+                    }
+                }
+
+                return nearest;
+            }
+
+            moveToward(target) {
+                // Calculate direction toward target
+                this.direction = Math.atan2(
+                    target.position.z - this.position.z,
+                    target.position.x - this.position.x
+                );
+
+                // Move in that direction
+                this.position.x += Math.cos(this.direction) * this.genes.speed;
+                this.position.z += Math.sin(this.direction) * this.genes.speed;
+            }
+
+            fleeFrom(threat) {
+                // Calculate direction away from threat
+                this.direction = Math.atan2(
+                    this.position.z - threat.position.z,
+                    this.position.x - threat.position.x
+                );
+
+                // Move in that direction (faster when fleeing)
+                this.position.x += Math.cos(this.direction) * this.genes.speed * 1.5;
+                this.position.z += Math.sin(this.direction) * this.genes.speed * 1.5;
+            }
+
+            moveRandomly() {
+                // Occasionally change direction
+                if (Math.random() < 0.05) {
+                    this.direction += randomFloat(-Math.PI / 4, Math.PI / 4);
+                }
+
+                // Move in current direction
+                this.position.x += Math.cos(this.direction) * this.genes.speed * 0.5;
+                this.position.z += Math.sin(this.direction) * this.genes.speed * 0.5;
+            }
+
+            eat(plant) {
+                // Gain energy from plant
+                this.energy += plant.genes.energyValue;
+                this.energy = Math.min(this.energy, this.genes.maxEnergy);
+
+                // Remove the plant
+                plant.die();
+                entities.plants = entities.plants.filter(p => p.alive);
+            }
+        }
+
+        // Predator class
+        class Predator extends Entity {
+            constructor(x, z, genes = null) {
+                super(x, z, genes);
+
+                // Create mesh
+                this.createMesh();
+
+                // Movement properties
+                this.direction = Math.random() * Math.PI * 2;
+                this.targetPrey = null;
+            }
+
+            generateRandomGenes() {
+                return {
+                    speed: randomFloat(0.15, 0.35),
+                    visionRange: randomFloat(10, 20),
+                    metabolismRate: randomFloat(0.2, 0.5),
+                    attackStrength: randomFloat(10, 30),
+                    reproductionThreshold: randomFloat(200, 300),
+                    reproductionCost: randomFloat(80, 150),
+                    maxEnergy: randomFloat(300, 500),
+                    maxAge: randomInt(300, 600),
+                    size: randomFloat(0.8, 1.5)
+                };
+            }
+
+            createMesh() {
+                // Create a fancy predator shape
+                const geometry = new THREE.DodecahedronGeometry(0.6);
+
+                // Create material with color variation
+                const material = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0xe53e3e),
+                    flatShading: true,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+
+                // Create mesh
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.set(this.position.x, 0.6, this.position.z);
+                this.mesh.scale.set(this.genes.size, this.genes.size, this.genes.size);
+
+                // Add spikes
+                const spikeGeometry = new THREE.ConeGeometry(0.15, 0.4, 4);
+                const spikeMaterial = new THREE.MeshStandardMaterial({
+                    color: getColorVariation(0xc53030),
+                    flatShading: true
+                });
+
+                // Add multiple spikes
+                for (let i = 0; i < 5; i++) {
+                    const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+                    const angle = (i / 5) * Math.PI * 2;
+                    spike.position.set(
+                        Math.cos(angle) * 0.6,
+                        Math.sin(angle) * 0.6,
+                        0
+                    );
+                    spike.rotation.z = angle + Math.PI / 2;
+                    this.mesh.add(spike);
+                }
+
+                // Add to scene
+                scene.add(this.mesh);
+            }
+
+            update() {
+                super.update();
+                if (!this.alive) return;
+
+                // Find nearest prey
+                const nearestPrey = this.findNearestPrey();
+
+                // Hunt prey if visible
+                if (nearestPrey && distance(this.position, nearestPrey.position) < this.genes.visionRange) {
+                    this.targetPrey = nearestPrey;
+                    this.moveToward(nearestPrey);
+
+                    // Attack prey if close enough
+                    if (distance(this.position, nearestPrey.position) < 1) {
+                        this.attack(nearestPrey);
+                    }
+                } else {
+                    // Random movement
+                    this.moveRandomly();
+                }
+
+                // Keep within bounds
+                this.keepInBounds();
+
+                // Update mesh rotation to face movement direction
+                if (this.mesh) {
+                    this.mesh.rotation.y = this.direction;
+                }
+
+                // Try to reproduce if enough energy
+                if (this.energy > this.genes.reproductionThreshold) {
+                    const child = this.reproduce(Predator);
+                    entities.predators.push(child);
+                }
+            }
+
+            findNearestPrey() {
+                let nearest = null;
+                let minDistance = Infinity;
+
+                for (const prey of entities.prey) {
+                    if (prey.alive) {
+                        const dist = distance(this.position, prey.position);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            nearest = prey;
+                        }
+                    }
+                }
+
+                return nearest;
+            }
+
+            moveToward(target) {
+                // Calculate direction toward target
+                this.direction = Math.atan2(
+                    target.position.z - this.position.z,
+                    target.position.x - this.position.x
+                );
+
+                // Move in that direction
+                this.position.x += Math.cos(this.direction) * this.genes.speed;
+                this.position.z += Math.sin(this.direction) * this.genes.speed;
+            }
+
+            moveRandomly() {
+                // Occasionally change direction
+                if (Math.random() < 0.03) {
+                    this.direction += randomFloat(-Math.PI / 4, Math.PI / 4);
+                }
+
+                // Move in current direction
+                this.position.x += Math.cos(this.direction) * this.genes.speed * 0.3;
+                this.position.z += Math.sin(this.direction) * this.genes.speed * 0.3;
+            }
+
+            attack(prey) {
+                // Deal damage to prey
+                prey.energy -= this.genes.attackStrength;
+
+                // If prey dies, consume it
+                if (prey.energy <= 0) {
+                    this.eat(prey);
+                }
+            }
+
+            eat(prey) {
+                // Gain energy from prey
+                this.energy += prey.energy * 0.8; // 80% efficiency
+                this.energy = Math.min(this.energy, this.genes.maxEnergy);
+
+                // Remove the prey
+                prey.die();
+                entities.prey = entities.prey.filter(p => p.alive);
+            }
+        }
+
+        // Initialize entities
+        function initializeEntities(plantCount, preyCount, predatorCount) {
+            // Create initial plants
+            for (let i = 0; i < plantCount; i++) {
+                const pos = getRandomPosition();
+                const plant = new Plant(pos.x, pos.z);
+                entities.plants.push(plant);
+            }
+
+            // Create initial prey
+            for (let i = 0; i < preyCount; i++) {
+                const pos = getRandomPosition();
+                const prey = new Prey(pos.x, pos.z);
+                entities.prey.push(prey);
+            }
+
+            // Create initial predators
+            for (let i = 0; i < predatorCount; i++) {
+                const pos = getRandomPosition();
+                const predator = new Predator(pos.x, pos.z);
+                entities.predators.push(predator);
+            }
+        }
+
+        // Initialize when the page loads
+        window.onload = init;
+    </script>
+</body>
+
+</html>
