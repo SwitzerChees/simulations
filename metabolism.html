@@ -79,9 +79,21 @@
                             <option value="light">Light Activity</option>
                             <option value="moderate">Moderate Exercise</option>
                             <option value="intense">High Intensity</option>
+                            <option value="endurance">Endurance Exercise</option>
                         </select>
                     </div>
                     <button id="exercise-button" class="mt-3 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md transition">Start Exercise</button>
+                </div>
+                
+                <!-- Fasting Control -->
+                <div class="mb-6">
+                    <h3 class="font-medium mb-2">Fasting Simulation</h3>
+                    <div>
+                        <label class="block text-sm mb-1">Fasting Hours</label>
+                        <input type="range" min="0" max="36" value="0" class="w-full" id="fasting-input">
+                        <span id="fasting-input-value" class="text-sm">0 hours</span>
+                    </div>
+                    <button id="fasting-button" class="mt-3 bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-md transition">Simulate Fasting</button>
                 </div>
                 
                 <!-- Simulation Controls -->
@@ -114,13 +126,30 @@
                     </div>
                 </div>
                 
+                <!-- Additional Metabolic Indicators -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="bg-green-100 p-3 rounded-md">
+                        <h3 class="font-medium text-green-800">Glycogen Stores</h3>
+                        <p id="glycogen-value" class="text-2xl font-bold">500 units</p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-md">
+                        <h3 class="font-medium text-purple-800">Ketone Level</h3>
+                        <p id="ketones-value" class="text-2xl font-bold">0.1 mmol/L</p>
+                    </div>
+                    <div class="bg-orange-100 p-3 rounded-md">
+                        <h3 class="font-medium text-orange-800">Fasting Time</h3>
+                        <p id="fasting-hours" class="text-2xl font-bold">0 hours</p>
+                    </div>
+                </div>
+                
                 <!-- Metabolism Type Indicator -->
                 <div class="mb-6">
                     <h3 class="font-medium mb-2">Current Metabolism</h3>
-                    <div class="flex space-x-2">
-                        <div id="aerobic-indicator" class="p-2 bg-green-200 rounded-md flex-1 text-center font-medium">Aerobic</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div id="aerobic-indicator" class="p-2 bg-green-500 text-white rounded-md flex-1 text-center font-medium">Aerobic</div>
                         <div id="anaerobic-indicator" class="p-2 bg-gray-200 rounded-md flex-1 text-center font-medium">Anaerobic</div>
                         <div id="fat-burning-indicator" class="p-2 bg-gray-200 rounded-md flex-1 text-center font-medium">Fat Burning</div>
+                        <div id="ketogenic-indicator" class="p-2 bg-gray-200 rounded-md flex-1 text-center font-medium">Ketogenic</div>
                     </div>
                 </div>
                 
@@ -145,11 +174,12 @@
         
         // Particle types and colors
         const particleTypes = {
-            carbs: { color: 0xffffff, size: 0.08 },  // White
-            glucose: { color: 0xffff00, size: 0.06 }, // Yellow
-            fats: { color: 0xffa500, size: 0.08 },    // Orange
-            proteins: { color: 0x0000ff, size: 0.08 }, // Blue
-            atp: { color: 0x00ff00, size: 0.05 }       // Green
+            carbs: { color: 0xffffff, size: 0.08, label: 'Carbs' },  // White
+            glucose: { color: 0xffff00, size: 0.06, label: 'Glucose' }, // Yellow
+            fats: { color: 0xffa500, size: 0.08, label: 'Fats' },    // Orange
+            proteins: { color: 0x0000ff, size: 0.08, label: 'Proteins' }, // Blue
+            ketones: { color: 0xff00ff, size: 0.06, label: 'Ketones' }, // Purple
+            atp: { color: 0x00ff00, size: 0.05, label: 'ATP' }       // Green
         };
         
         // Simulation state
@@ -157,9 +187,11 @@
             energy: 2000,        // kcal
             glucose: 100,        // mg/dL
             glycogen: 500,       // g
+            ketones: 5,          // mmol/L
             fatStores: 10000,    // kcal
             metabolicRate: 1.0,  // multiplier
-            activeMetabolism: 'aerobic', // aerobic, anaerobic, fat-burning
+            fastingHours: 0,     // hours since last meal
+            activeMetabolism: 'aerobic', // aerobic, anaerobic, fat-burning, ketogenic
             nutrients: {
                 carbs: 0,
                 fats: 0,
@@ -231,14 +263,17 @@
         function createBasicBodyModel() {
             // Define node positions for metabolic components
             const nodePositions = {
-                mouth: new THREE.Vector2(-4, 3),
-                stomach: new THREE.Vector2(-4, 1),
-                intestine: new THREE.Vector2(-4, -1),
-                liver: new THREE.Vector2(-2, 0),
-                bloodstream: new THREE.Vector2(0, 0),
-                muscle: new THREE.Vector2(2, 2),
-                fat: new THREE.Vector2(2, -2),
-                cell: new THREE.Vector2(4, 0)
+                mouth: new THREE.Vector2(-6, 3),
+                stomach: new THREE.Vector2(-6, 1),
+                intestine: new THREE.Vector2(-6, -1),
+                liver: new THREE.Vector2(-3, 0),
+                glycogen: new THREE.Vector2(-3, 2),  // Glycogen storage in liver
+                fat: new THREE.Vector2(-1, -3),      // Fat tissue
+                adipose: new THREE.Vector2(-3, -3),  // Adipose tissue for ketone production
+                bloodstream: new THREE.Vector2(0, 0), // Central circulation
+                muscle: new THREE.Vector2(3, 2),     // Muscle tissue
+                brain: new THREE.Vector2(3, -2),     // Brain (uses glucose or ketones)
+                cell: new THREE.Vector2(5, 0)        // Generic cell for ATP production
             };
             
             // Create nodes for each component
@@ -254,10 +289,13 @@
                     case 'mouth':
                     case 'stomach':
                     case 'intestine':
-                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff9999 }); // Digestive - red
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff9999 }); // Digestive - pink
                         break;
                     case 'liver':
                         nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x8b4513 }); // Brown
+                        break;
+                    case 'glycogen':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc00 }); // Golden yellow
                         break;
                     case 'bloodstream':
                         nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Blood - red
@@ -265,8 +303,14 @@
                     case 'muscle':
                         nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff6347 }); // Muscle - red-orange
                         break;
+                    case 'brain':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x9370db }); // Brain - purple
+                        break;
                     case 'fat':
                         nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Fat - yellow
+                        break;
+                    case 'adipose':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500 }); // Adipose - orange
                         break;
                     case 'cell':
                         nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Cell - green
@@ -298,21 +342,40 @@
                 scene.add(label);
             });
             
-            // Create connections between nodes
+            // Create connections between nodes with pathway labels
             const connections = [
-                ['mouth', 'stomach'],
-                ['stomach', 'intestine'],
-                ['intestine', 'liver'],
-                ['liver', 'bloodstream'],
-                ['intestine', 'bloodstream'],
-                ['bloodstream', 'muscle'],
-                ['bloodstream', 'fat'],
-                ['bloodstream', 'cell']
+                // Digestive pathway
+                ['mouth', 'stomach', 'Food'],
+                ['stomach', 'intestine', 'Digestion'],
+                ['intestine', 'liver', 'Nutrients'],
+                
+                // Glucose pathways
+                ['liver', 'glycogen', 'Glucose storage'],
+                ['glycogen', 'liver', 'Glucose release'],
+                ['liver', 'bloodstream', 'Glucose'],
+                
+                // Fat metabolism
+                ['liver', 'fat', 'Lipogenesis'],
+                ['fat', 'adipose', 'Fat breakdown'],
+                ['adipose', 'liver', 'Fatty acids'],
+                
+                // Ketone production
+                ['liver', 'bloodstream', 'Ketones'],
+                
+                // Nutrient distribution
+                ['bloodstream', 'muscle', 'Glucose/Ketones'],
+                ['bloodstream', 'brain', 'Glucose/Ketones'],
+                ['bloodstream', 'cell', 'Nutrients'],
+                
+                // Energy usage
+                ['muscle', 'bloodstream', 'CO₂, H₂O'],
+                ['brain', 'bloodstream', 'CO₂, H₂O'],
+                ['cell', 'bloodstream', 'Waste']
             ];
             
             metabolismObjects.connections = [];
             
-            connections.forEach(([from, to]) => {
+            connections.forEach(([from, to, label]) => {
                 const fromPos = nodePositions[from];
                 const toPos = nodePositions[to];
                 
@@ -325,10 +388,40 @@
                 const line = new THREE.Line(lineGeometry, lineMaterial);
                 scene.add(line);
                 
+                // Create connection label
+                if (label) {
+                    const midX = (fromPos.x + toPos.x) / 2;
+                    const midY = (fromPos.y + toPos.y) / 2;
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = 256;
+                    canvas.height = 64;
+                    context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                    context.font = '18px Arial';
+                    context.fillStyle = '#000000';
+                    context.textAlign = 'center';
+                    context.fillText(label, canvas.width / 2, canvas.height / 2 + 6);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const labelMaterial = new THREE.SpriteMaterial({ 
+                        map: texture,
+                        transparent: true
+                    });
+                    const pathLabel = new THREE.Sprite(labelMaterial);
+                    pathLabel.position.set(midX, midY, 0);
+                    pathLabel.scale.set(1.5, 0.4, 1);
+                    scene.add(pathLabel);
+                }
+                
                 metabolismObjects.connections.push({
                     from: from,
                     to: to,
-                    line: line
+                    label: label,
+                    line: line,
+                    type: label && label.includes('Ketones') ? 'ketones' : 
+                          label && label.includes('Glucose') ? 'glucose' : 'other'
                 });
             });
         }
@@ -348,6 +441,11 @@
                 document.getElementById('proteins-value').textContent = this.value + 'g';
             });
             
+            // Fasting slider
+            document.getElementById('fasting-input').addEventListener('input', function() {
+                document.getElementById('fasting-input-value').textContent = this.value + ' hours';
+            });
+            
             // Eat button
             document.getElementById('eat-button').addEventListener('click', function() {
                 const carbs = parseInt(document.getElementById('carbs-input').value);
@@ -361,6 +459,12 @@
             document.getElementById('exercise-button').addEventListener('click', function() {
                 const intensity = document.getElementById('exercise-type').value;
                 startExercise(intensity);
+            });
+            
+            // Fasting button
+            document.getElementById('fasting-button').addEventListener('click', function() {
+                const hours = parseInt(document.getElementById('fasting-input').value);
+                simulateFasting(hours);
             });
             
             // Reset button
@@ -507,26 +611,97 @@
                     // Liver processes nutrients
                     if (particle.type === 'carbs') {
                         // Convert carbs to glucose
-                        createParticle('glucose', 'liver', 'bloodstream');
+                        if (simulationState.glycogen < 400 && Math.random() < 0.3) {
+                            // Store some glucose as glycogen if stores are low
+                            createParticle('glucose', 'liver', 'glycogen');
+                            simulationState.glycogen += 10;
+                        } else {
+                            // Send glucose to bloodstream
+                            createParticle('glucose', 'liver', 'bloodstream');
+                            simulationState.glucose += 5;
+                        }
+                    } else if (particle.type === 'fats') {
+                        if (simulationState.activeMetabolism === 'ketogenic' || 
+                            (simulationState.glucose < 70 && simulationState.fastingHours > 12)) {
+                            // Convert fats to ketones when glucose is low or in ketogenic state
+                            createParticle('ketones', 'liver', 'bloodstream');
+                            simulationState.ketones += 0.5;
+                        } else {
+                            // Process fats normally
+                            createParticle('fats', 'liver', 'bloodstream');
+                        }
                     } else {
                         // Other nutrients pass through
                         createParticle(particle.type, 'liver', 'bloodstream');
                     }
                     break;
                     
+                case 'glycogen':
+                    // Glycogen gets converted back to glucose when needed
+                    if (simulationState.glucose < 80 || simulationState.activeMetabolism === 'anaerobic') {
+                        createParticle('glucose', 'glycogen', 'liver');
+                        simulationState.glycogen -= 10;
+                        if (simulationState.glycogen < 0) simulationState.glycogen = 0;
+                    }
+                    break;
+                    
+                case 'fat':
+                    // Fat storage or breakdown
+                    if (simulationState.activeMetabolism === 'fat-burning' || 
+                        simulationState.activeMetabolism === 'ketogenic' || 
+                        simulationState.glucose < 70) {
+                        // Break down fat for energy
+                        createParticle('fats', 'fat', 'adipose');
+                        simulationState.fatStores -= 20;
+                    }
+                    break;
+                    
+                case 'adipose':
+                    // Adipose tissue processes fats
+                    if (simulationState.activeMetabolism === 'ketogenic' || 
+                        (simulationState.glucose < 70 && simulationState.fastingHours > 12)) {
+                        // Send fatty acids to liver for ketone production
+                        createParticle('fats', 'adipose', 'liver');
+                    } else {
+                        // Use fatty acids directly
+                        createParticle('fats', 'adipose', 'bloodstream');
+                    }
+                    break;
+                    
                 case 'bloodstream':
-                    // Distribute to cells, muscles, or fat based on metabolism and nutrient type
+                    // Distribute to cells, muscles, brain, or fat based on metabolism and nutrient type
                     let destination;
                     
-                    if (simulationState.activeMetabolism === 'anaerobic' && particle.type === 'glucose') {
-                        destination = 'muscle';
-                    } else if (simulationState.activeMetabolism === 'fat-burning' && particle.type === 'fats') {
-                        destination = 'cell';
-                    } else if (particle.type === 'fats' && simulationState.energy > 2500) {
-                        // Store excess energy as fat
-                        destination = 'fat';
+                    if (particle.type === 'glucose') {
+                        if (simulationState.activeMetabolism === 'anaerobic') {
+                            // During intense exercise, glucose goes primarily to muscles
+                            destination = 'muscle';
+                        } else if (Math.random() < 0.3) {
+                            // Brain always needs glucose
+                            destination = 'brain';
+                        } else if (simulationState.energy > 2500 && Math.random() < 0.2) {
+                            // Store excess glucose as fat
+                            destination = 'fat';
+                        } else {
+                            // Otherwise to general cells
+                            destination = 'cell';
+                        }
+                    } else if (particle.type === 'ketones') {
+                        // Ketones go primarily to the brain when glucose is low
+                        destination = Math.random() < 0.6 ? 'brain' : 'muscle';
+                    } else if (particle.type === 'fats') {
+                        if (simulationState.activeMetabolism === 'fat-burning') {
+                            // During fat-burning, fats go to muscles and cells
+                            destination = Math.random() < 0.5 ? 'muscle' : 'cell';
+                        } else if (simulationState.energy > 2200) {
+                            // Store excess energy as fat
+                            destination = 'fat';
+                        } else {
+                            // Otherwise to general cells
+                            destination = 'cell';
+                        }
                     } else {
-                        // Default to cell for energy production
+                        // Default to cell for other nutrients
                         destination = 'cell';
                     }
                     
@@ -535,17 +710,49 @@
                     
                 case 'cell':
                     // In cells, nutrients are converted to ATP
-                    if (Math.random() < 0.3) {
+                    if (Math.random() < 0.4) {
                         // Create ATP particles that stay within the cell
                         createParticle('atp', 'cell', 'cell');
+                        // Update energy based on nutrient type
+                        if (particle.type === 'glucose') {
+                            simulationState.energy += 4; // Glucose provides more ATP in aerobic conditions
+                        } else if (particle.type === 'ketones') {
+                            simulationState.energy += 3; // Ketones are efficient too
+                        } else if (particle.type === 'fats') {
+                            simulationState.energy += 6; // Fats provide more energy but slower
+                        }
                     }
                     break;
                     
                 case 'muscle':
-                    // In muscles, glucose is used for energy
-                    if (particle.type === 'glucose' && Math.random() < 0.3) {
+                    // In muscles, nutrients are used for energy
+                    if (Math.random() < 0.4) {
                         // Create ATP in muscle
                         createParticle('atp', 'muscle', 'muscle');
+                        // Update energy based on nutrient type and metabolism
+                        if (particle.type === 'glucose' && simulationState.activeMetabolism === 'anaerobic') {
+                            simulationState.energy += 2; // Less efficient in anaerobic conditions
+                        } else if (particle.type === 'glucose') {
+                            simulationState.energy += 4; // Normal glucose metabolism
+                        } else if (particle.type === 'ketones') {
+                            simulationState.energy += 3; // Ketones are efficient
+                        } else if (particle.type === 'fats') {
+                            simulationState.energy += 6; // Fats provide more energy but slower
+                        }
+                    }
+                    break;
+                    
+                case 'brain':
+                    // Brain primarily uses glucose, but can use ketones when glucose is low
+                    if (Math.random() < 0.4) {
+                        // Create ATP in brain
+                        createParticle('atp', 'brain', 'brain');
+                        // Update energy based on nutrient type
+                        if (particle.type === 'glucose') {
+                            simulationState.energy += 4; // Brain prefers glucose
+                        } else if (particle.type === 'ketones') {
+                            simulationState.energy += 3; // Ketones are alternative fuel
+                        }
                     }
                     break;
             }
@@ -553,39 +760,104 @@
         
         // Highlight active metabolic pathways based on current state
         function highlightActivePathways() {
-            // Reset all connections to default color
+            // Reset all connections to default color and make them semi-transparent
             metabolismObjects.connections.forEach(connection => {
                 connection.line.material.color.set(0x888888);
+                connection.line.material.transparent = true;
+                connection.line.material.opacity = 0.3;
+                connection.line.material.linewidth = 1;
             });
             
-            // Highlight active pathways based on metabolism type
-            let activeConnections = [];
+            // Update process information based on active metabolism
+            let infoText = '';
             
-            if (simulationState.activeMetabolism === 'aerobic') {
-                // Aerobic metabolism - glucose through bloodstream to cells
-                activeConnections = [
-                    ['bloodstream', 'cell']
-                ];
-            } else if (simulationState.activeMetabolism === 'anaerobic') {
-                // Anaerobic metabolism - glucose to muscles
-                activeConnections = [
-                    ['bloodstream', 'muscle']
-                ];
-            } else if (simulationState.activeMetabolism === 'fat-burning') {
-                // Fat metabolism - fat to bloodstream to cells
-                activeConnections = [
-                    ['fat', 'bloodstream'],
-                    ['bloodstream', 'cell']
-                ];
+            // Highlight active pathways based on metabolism type
+            switch(simulationState.activeMetabolism) {
+                case 'aerobic':
+                    // Primary energy source: Glucose with oxygen
+                    infoText = '<strong>Aerobic Metabolism:</strong> Using glucose as primary energy source. ' +
+                        'Glucose travels through the bloodstream to muscles, brain, and other cells where it is ' +
+                        'broken down with oxygen to produce ATP efficiently.';
+                    
+                    // Highlight glucose pathways
+                    highlightPathway('liver', 'bloodstream', 0x00ff00, 'Glucose');
+                    highlightPathway('bloodstream', 'muscle', 0x00ff00, 'Glucose');
+                    highlightPathway('bloodstream', 'brain', 0x00ff00, 'Glucose');
+                    highlightPathway('bloodstream', 'cell', 0x00ff00, 'Glucose');
+                    break;
+                    
+                case 'anaerobic':
+                    // Primary energy source: Glucose without oxygen
+                    infoText = '<strong>Anaerobic Metabolism:</strong> Using glucose without sufficient oxygen. ' +
+                        'Glycogen is rapidly converted to glucose for muscles, producing lactate as a byproduct. ' +
+                        'This process is less efficient but provides quick energy for intense activity.';
+                    
+                    // Highlight anaerobic glucose pathway
+                    highlightPathway('glycogen', 'liver', 0xff0000, 'Glycogen');
+                    highlightPathway('liver', 'bloodstream', 0xff0000, 'Glucose');
+                    highlightPathway('bloodstream', 'muscle', 0xff0000, 'Glucose');
+                    break;
+                    
+                case 'fat-burning':
+                    // Primary energy source: Fats
+                    infoText = '<strong>Fat-Burning Metabolism:</strong> Using stored fat as primary energy source. ' +
+                        'Fat is broken down into fatty acids, which are converted to energy in the liver and muscles. ' +
+                        'This process is slower but provides sustained energy for longer, lower-intensity activities.';
+                    
+                    // Highlight fat to energy pathways
+                    highlightPathway('fat', 'adipose', 0xffa500, 'Fats');
+                    highlightPathway('adipose', 'liver', 0xffa500, 'Fatty acids');
+                    highlightPathway('liver', 'bloodstream', 0xffa500, 'Energy');
+                    highlightPathway('bloodstream', 'muscle', 0xffa500, 'Energy');
+                    highlightPathway('bloodstream', 'cell', 0xffa500, 'Energy');
+                    break;
+                    
+                case 'ketogenic':
+                    // Primary energy source: Ketones (new state)
+                    infoText = '<strong>Ketogenic Metabolism:</strong> Using ketones as primary energy source. ' +
+                        'When glucose is limited (during fasting or low-carb diet), the liver converts fat into ketone bodies. ' +
+                        'The brain and other tissues can use these ketones as an alternative fuel source.';
+                    
+                    // Highlight ketone pathways
+                    highlightPathway('fat', 'adipose', 0xff00ff, 'Fats');
+                    highlightPathway('adipose', 'liver', 0xff00ff, 'Fatty acids');
+                    highlightPathway('liver', 'bloodstream', 0xff00ff, 'Ketones');
+                    highlightPathway('bloodstream', 'brain', 0xff00ff, 'Ketones');
+                    highlightPathway('bloodstream', 'cell', 0xff00ff, 'Ketones');
+                    break;
             }
             
-            // Highlight the active connections
+            // Update the process information text
+            document.getElementById('info-panel').innerHTML = infoText;
+        }
+        
+        // Helper function to highlight a specific pathway with a label
+        function highlightPathway(from, to, color, label) {
             metabolismObjects.connections.forEach(connection => {
-                activeConnections.forEach(([from, to]) => {
-                    if (connection.from === from && connection.to === to) {
-                        connection.line.material.color.set(0x00ff00); // Green for active
+                if (connection.from === from && connection.to === to) {
+                    connection.line.material.color.set(color);
+                    connection.line.material.opacity = 1.0;
+                    connection.line.material.linewidth = 2;
+                    
+                    // Add a floating label to show what's flowing
+                    if (label && !connection.flowLabel) {
+                        const fromPos = metabolismObjects.nodes[from].position;
+                        const toPos = metabolismObjects.nodes[to].position;
+                        const midX = (fromPos.x + toPos.x) / 2;
+                        const midY = (fromPos.y + toPos.y) / 2;
+                        
+                        // Create a small particle to represent the flow
+                        const flowParticle = new THREE.Mesh(
+                            new THREE.CircleGeometry(0.15, 16),
+                            new THREE.MeshBasicMaterial({ color: color })
+                        );
+                        flowParticle.position.set(midX, midY, 0.1);
+                        scene.add(flowParticle);
+                        
+                        // Store reference to remove later if needed
+                        connection.flowLabel = flowParticle;
                     }
-                });
+                }
             });
         }
 
@@ -593,7 +865,10 @@
         function updateUI() {
             document.getElementById('energy-value').textContent = Math.round(simulationState.energy) + ' kcal';
             document.getElementById('glucose-value').textContent = Math.round(simulationState.glucose) + ' mg/dL';
+            document.getElementById('glycogen-value').textContent = Math.round(simulationState.glycogen) + ' units';
+            document.getElementById('ketones-value').textContent = simulationState.ketones.toFixed(1) + ' mmol/L';
             document.getElementById('metabolic-rate').textContent = simulationState.metabolicRate.toFixed(1) + 'x';
+            document.getElementById('fasting-hours').textContent = simulationState.fastingHours + ' hours';
             
             // Update metabolism indicators
             document.getElementById('aerobic-indicator').className = 
@@ -604,6 +879,9 @@
             
             document.getElementById('fat-burning-indicator').className = 
                 simulationState.activeMetabolism === 'fat-burning' ? 'p-2 bg-yellow-500 text-white rounded-md flex-1 text-center font-medium' : 'p-2 bg-gray-200 rounded-md flex-1 text-center font-medium';
+                
+            document.getElementById('ketogenic-indicator').className = 
+                simulationState.activeMetabolism === 'ketogenic' ? 'p-2 bg-pink-500 text-white rounded-md flex-1 text-center font-medium' : 'p-2 bg-gray-200 rounded-md flex-1 text-center font-medium';
         }
 
         // Handle food consumption
@@ -664,53 +942,187 @@
         function startExercise(intensity) {
             let intensityFactor = 1;
             let metabolismType = 'aerobic';
+            let infoText = '';
             
+            // Set base metabolic rate based on intensity
             switch(intensity) {
                 case 'light':
                     intensityFactor = 1.5;
-                    metabolismType = 'aerobic';
                     break;
                 case 'moderate':
                     intensityFactor = 2.5;
-                    metabolismType = 'aerobic';
                     break;
                 case 'intense':
                     intensityFactor = 4;
-                    metabolismType = 'anaerobic';
+                    break;
+                case 'endurance':
+                    intensityFactor = 2.0;
                     break;
                 default: // rest
                     intensityFactor = 1;
+            }
+            
+            // Determine metabolism type based on intensity, glucose levels, and fasting state
+            if (intensity === 'intense') {
+                // Intense exercise primarily uses anaerobic metabolism if glucose/glycogen is available
+                if (simulationState.glucose > 80 || simulationState.glycogen > 100) {
+                    metabolismType = 'anaerobic';
+                    infoText = 'During intense exercise, your body is using anaerobic metabolism, rapidly converting glycogen to glucose for quick energy.';
+                } else if (simulationState.fastingHours > 12) {
+                    // If fasting and glycogen depleted, might use ketones
+                    metabolismType = 'ketogenic';
+                    infoText = 'Your glycogen stores are depleted and you\'re in a fasted state. Your body is using ketones for energy during intense exercise.';
+                } else {
+                    // Fall back to fat burning if glucose is low
+                    metabolismType = 'fat-burning';
+                    infoText = 'With low glucose levels, your body is primarily burning fat for energy, even during intense activity.';
+                }
+            } else if (intensity === 'endurance') {
+                // Endurance exercise primarily uses fat metabolism
+                if (simulationState.fastingHours > 12 || simulationState.glucose < 70) {
+                    // If fasting or low glucose, might use ketones
+                    metabolismType = 'ketogenic';
+                    infoText = 'During endurance exercise in a fasted state, your body is primarily using ketones for energy.';
+                } else {
+                    // Otherwise use fat burning
+                    metabolismType = 'fat-burning';
+                    infoText = 'Your body is optimized for fat burning during endurance exercise, preserving glucose for brain function.';
+                }
+            } else if (intensity === 'moderate') {
+                // Moderate exercise uses a mix of glucose and fat
+                if (simulationState.glucose < 70) {
+                    // If glucose is low, primarily use fat
+                    metabolismType = 'fat-burning';
+                    infoText = 'With low blood glucose, your body is primarily using fat for energy during moderate exercise.';
+                } else if (simulationState.fastingHours > 12) {
+                    // If fasting, might use ketones
+                    metabolismType = 'ketogenic';
+                    infoText = 'In your fasted state, your liver is producing ketones which are being used for energy during moderate exercise.';
+                } else {
+                    // Otherwise use aerobic metabolism
                     metabolismType = 'aerobic';
+                    infoText = 'Your body is using aerobic metabolism, efficiently burning glucose with oxygen during moderate exercise.';
+                }
+            } else if (intensity === 'light' || intensity === 'rest') {
+                // Light exercise or rest primarily uses aerobic metabolism
+                if (simulationState.fastingHours > 16 || simulationState.glucose < 60) {
+                    metabolismType = 'ketogenic';
+                    infoText = intensity === 'rest' ? 
+                        'While at rest in a fasted state, your body is using ketones as an alternative fuel source.' : 
+                        'During light exercise in a fasted state, your body is primarily using ketones for energy.';
+                } else if (simulationState.glucose < 80) {
+                    metabolismType = 'fat-burning';
+                    infoText = intensity === 'rest' ? 
+                        'While at rest with lower glucose levels, your body is primarily burning fat for energy.' : 
+                        'During light exercise with lower glucose levels, your body is primarily burning fat for energy.';
+                } else {
+                    metabolismType = 'aerobic';
+                    infoText = intensity === 'rest' ? 
+                        'While at rest, your body is using aerobic metabolism, efficiently burning glucose with oxygen.' : 
+                        'During light exercise, your body is using aerobic metabolism, efficiently burning glucose with oxygen.';
+                }
             }
             
             // Update simulation state
             simulationState.metabolicRate = intensityFactor;
             simulationState.activeMetabolism = metabolismType;
             
-            // If glucose is low, switch to fat burning
-            if (simulationState.glucose < 70 && intensity !== 'intense') {
-                simulationState.activeMetabolism = 'fat-burning';
-            }
+            // Update energy consumption based on metabolic rate
+            simulationState.energy -= intensityFactor * 5;
+            simulationState.glucose -= intensityFactor * 2;
+            
+            // Ensure values don't go below minimum
+            if (simulationState.energy < 1000) simulationState.energy = 1000;
+            if (simulationState.glucose < 50) simulationState.glucose = 50;
             
             // Update info panel
             document.getElementById('info-panel').innerHTML = `
                 <p><strong>Exercise started:</strong> ${intensity} intensity</p>
                 <p><strong>Metabolic rate:</strong> ${intensityFactor.toFixed(1)}x</p>
                 <p><strong>Active metabolism:</strong> ${simulationState.activeMetabolism}</p>
-                <p>During ${intensity} exercise, your body is primarily using ${simulationState.activeMetabolism} metabolism for energy production.</p>
+                <p>${infoText}</p>
             `;
             
-            // In future steps, we'll add animations for increased cellular activity
+            // Update metabolism display and highlight active pathways
+            updateMetabolismDisplay();
+            highlightActivePathways();
         }
 
+        // Simulate fasting effects on metabolism
+        function simulateFasting(hours) {
+            // Update fasting hours
+            simulationState.fastingHours = hours;
+            
+            // Simulate metabolic changes based on fasting duration
+            if (hours > 0) {
+                // Decrease glucose gradually as fasting progresses
+                simulationState.glucose = Math.max(60, 100 - (hours * 1.2));
+                
+                // Decrease glycogen stores
+                simulationState.glycogen = Math.max(50, 500 - (hours * 15));
+                
+                // Increase ketone production after 12+ hours of fasting
+                if (hours > 12) {
+                    simulationState.ketones = 0.5 + ((hours - 12) * 0.2);
+                    if (simulationState.ketones > 5) simulationState.ketones = 5;
+                } else {
+                    simulationState.ketones = 0.1;
+                }
+                
+                // Determine metabolism type based on fasting duration
+                if (hours > 16) {
+                    simulationState.activeMetabolism = 'ketogenic';
+                } else if (hours > 8) {
+                    simulationState.activeMetabolism = 'fat-burning';
+                }
+                
+                // Update energy from fat stores
+                if (hours > 4) {
+                    // Mobilize fat for energy
+                    simulationState.fatStores -= hours * 10;
+                    if (simulationState.fatStores < 5000) simulationState.fatStores = 5000;
+                }
+                
+                // Update info panel with fasting information
+                let infoText = '';
+                if (hours > 16) {
+                    infoText = `<p><strong>Extended Fasting (${hours} hours):</strong> Your body is in ketosis. The liver is converting fat into ketone bodies, which serve as an alternative fuel source for your brain and muscles. Glucose is being preserved for critical functions.</p>`;
+                } else if (hours > 12) {
+                    infoText = `<p><strong>Fasting (${hours} hours):</strong> Your liver glycogen is depleted, and your body is beginning to produce ketones. Fat metabolism is your primary energy source, and your body is adapting to use ketones.</p>`;
+                } else if (hours > 8) {
+                    infoText = `<p><strong>Fasting (${hours} hours):</strong> Your blood glucose has decreased, and your body is primarily using fat for energy. Liver glycogen is being used to maintain blood glucose levels.</p>`;
+                } else if (hours > 4) {
+                    infoText = `<p><strong>Early Fasting (${hours} hours):</strong> Your body is using remaining glucose and beginning to tap into liver glycogen stores. Insulin levels are dropping, allowing fat mobilization.</p>`;
+                } else {
+                    infoText = `<p><strong>Post-absorptive State (${hours} hours):</strong> Your body is using blood glucose and beginning to tap into liver glycogen. You're in a normal fasted state between meals.</p>`;
+                }
+                
+                document.getElementById('info-panel').innerHTML = infoText;
+            } else {
+                // Reset to fed state if fasting hours is set to 0
+                simulationState.glucose = 100;
+                simulationState.glycogen = 500;
+                simulationState.ketones = 0.1;
+                simulationState.activeMetabolism = 'aerobic';
+                
+                document.getElementById('info-panel').innerHTML = `<p>Fed state: Your body is primarily using glucose for energy, with normal insulin levels.</p>`;
+            }
+            
+            // Update UI and highlight active pathways
+            updateUI();
+            highlightActivePathways();
+        }
+        
         // Reset simulation to initial state
         function resetSimulation() {
             // Reset simulation state
             simulationState.energy = 2000;
             simulationState.glucose = 100;
             simulationState.glycogen = 500;
+            simulationState.ketones = 0.1;
             simulationState.fatStores = 10000;
             simulationState.metabolicRate = 1.0;
+            simulationState.fastingHours = 0;
             simulationState.activeMetabolism = 'aerobic';
             simulationState.nutrients = {
                 carbs: 0,
@@ -726,6 +1138,8 @@
             document.getElementById('proteins-input').value = 20;
             document.getElementById('proteins-value').textContent = '20g';
             document.getElementById('exercise-type').value = 'rest';
+            document.getElementById('fasting-input').value = 0;
+            document.getElementById('fasting-input-value').textContent = '0 hours';
             
             // Update info panel
             document.getElementById('info-panel').innerHTML = `
@@ -733,7 +1147,9 @@
                 <p>Welcome to the Human Metabolism Simulation. Use the controls on the left to simulate food intake and exercise.</p>
             `;
             
+            // Update UI and highlight active pathways
             updateUI();
+            highlightActivePathways();
         }
 
         // Initialize the application when the page loads
