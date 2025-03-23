@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Metabolism Simulation</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <style>
+        body {
+            overflow: hidden;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+        }
+        #simulation-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        .panel {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Simulation Canvas -->
+    <canvas id="simulation-canvas"></canvas>
+
+    <!-- UI Controls -->
+    <div class="fixed top-0 left-0 z-10 p-2 flex flex-col">
+        <header class="panel p-2 mb-2 w-full">
+            <h1 class="text-xl font-bold text-gray-800">Human Metabolism Simulation</h1>
+            <p class="text-sm text-gray-600">Visualizing food processing and energy production in the human body</p>
+        </header>
+
+        <div class="flex gap-2">
+            <!-- Left Panel: Controls -->
+            <div class="panel p-3 w-64 flex flex-col">
+                <h2 class="text-lg font-semibold mb-2">Controls</h2>
+                
+                <!-- Food Intake Section -->
+                <div class="mb-6">
+                    <h3 class="font-medium mb-2">Food Intake</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm mb-1">Carbohydrates (g)</label>
+                            <input type="range" min="0" max="100" value="50" class="w-full" id="carbs-input">
+                            <span id="carbs-value" class="text-sm">50g</span>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Fats (g)</label>
+                            <input type="range" min="0" max="100" value="30" class="w-full" id="fats-input">
+                            <span id="fats-value" class="text-sm">30g</span>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Proteins (g)</label>
+                            <input type="range" min="0" max="100" value="20" class="w-full" id="proteins-input">
+                            <span id="proteins-value" class="text-sm">20g</span>
+                        </div>
+                        <button id="eat-button" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md transition">Consume Food</button>
+                    </div>
+                </div>
+                
+                <!-- Exercise Section -->
+                <div class="mb-6">
+                    <h3 class="font-medium mb-2">Physical Activity</h3>
+                    <div>
+                        <label class="block text-sm mb-1">Exercise Intensity</label>
+                        <select id="exercise-type" class="w-full p-2 border rounded-md">
+                            <option value="rest">Rest</option>
+                            <option value="light">Light Activity</option>
+                            <option value="moderate">Moderate Exercise</option>
+                            <option value="intense">High Intensity</option>
+                        </select>
+                    </div>
+                    <button id="exercise-button" class="mt-3 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md transition">Start Exercise</button>
+                </div>
+                
+                <!-- Simulation Controls -->
+                <div>
+                    <h3 class="font-medium mb-2">Simulation</h3>
+                    <div class="flex space-x-2">
+                        <button id="reset-button" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md transition">Reset</button>
+                        <button id="pause-button" class="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded-md transition">Pause</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Status & Information -->
+            <div class="panel p-3 w-80 flex flex-col">
+                <h2 class="text-lg font-semibold mb-2">Metabolism Status</h2>
+                
+                <!-- Energy & Nutrient Status -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="bg-blue-100 p-3 rounded-md">
+                        <h3 class="font-medium text-blue-800">Available Energy</h3>
+                        <p id="energy-value" class="text-2xl font-bold">2000 kcal</p>
+                    </div>
+                    <div class="bg-yellow-100 p-3 rounded-md">
+                        <h3 class="font-medium text-yellow-800">Glucose Level</h3>
+                        <p id="glucose-value" class="text-2xl font-bold">100 mg/dL</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-md">
+                        <h3 class="font-medium text-red-800">Metabolic Rate</h3>
+                        <p id="metabolic-rate" class="text-2xl font-bold">1.0x</p>
+                    </div>
+                </div>
+                
+                <!-- Metabolism Type Indicator -->
+                <div class="mb-6">
+                    <h3 class="font-medium mb-2">Current Metabolism</h3>
+                    <div class="flex space-x-2">
+                        <div id="aerobic-indicator" class="p-2 bg-green-200 rounded-md flex-1 text-center font-medium">Aerobic</div>
+                        <div id="anaerobic-indicator" class="p-2 bg-gray-200 rounded-md flex-1 text-center font-medium">Anaerobic</div>
+                        <div id="fat-burning-indicator" class="p-2 bg-gray-200 rounded-md flex-1 text-center font-medium">Fat Burning</div>
+                    </div>
+                </div>
+                
+                <!-- Information Panel -->
+                <div class="flex-1 overflow-auto bg-gray-50 p-3 rounded-md">
+                    <h3 class="font-medium mb-2">Process Information</h3>
+                    <div id="info-panel" class="text-sm">
+                        <p>Welcome to the Human Metabolism Simulation. Use the controls on the left to simulate food intake and exercise.</p>
+                        <p>The visualization will show how nutrients are processed and how different types of metabolism are activated.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Three.js scene
+        let scene, camera, renderer;
+        let metabolismObjects = {};
+        let isSimulationRunning = true;
+        let particles = [];
+        
+        // Particle types and colors
+        const particleTypes = {
+            carbs: { color: 0xffffff, size: 0.08 },  // White
+            glucose: { color: 0xffff00, size: 0.06 }, // Yellow
+            fats: { color: 0xffa500, size: 0.08 },    // Orange
+            proteins: { color: 0x0000ff, size: 0.08 }, // Blue
+            atp: { color: 0x00ff00, size: 0.05 }       // Green
+        };
+        
+        // Simulation state
+        const simulationState = {
+            energy: 2000,        // kcal
+            glucose: 100,        // mg/dL
+            glycogen: 500,       // g
+            fatStores: 10000,    // kcal
+            metabolicRate: 1.0,  // multiplier
+            activeMetabolism: 'aerobic', // aerobic, anaerobic, fat-burning
+            nutrients: {
+                carbs: 0,
+                fats: 0,
+                proteins: 0
+            }
+        };
+
+        // Initialize the application
+        function init() {
+            initThreeJS();
+            initEventListeners();
+            animate();
+            updateUI();
+        }
+
+        // Setup Three.js scene
+        function initThreeJS() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            
+            // Create orthographic camera for 2D visualization
+            const aspectRatio = window.innerWidth / window.innerHeight;
+            const frustumSize = 10;
+            camera = new THREE.OrthographicCamera(
+                frustumSize * aspectRatio / -2,
+                frustumSize * aspectRatio / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                0.1,
+                1000
+            );
+            camera.position.z = 15;
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('simulation-canvas'),
+                antialias: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Create initial objects
+            createBasicBodyModel();
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                const aspectRatio = window.innerWidth / window.innerHeight;
+                const frustumSize = 10;
+                
+                camera.left = frustumSize * aspectRatio / -2;
+                camera.right = frustumSize * aspectRatio / 2;
+                camera.top = frustumSize / 2;
+                camera.bottom = frustumSize / -2;
+                
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // Create a 2D metabolic pathway diagram
+        function createBasicBodyModel() {
+            // Define node positions for metabolic components
+            const nodePositions = {
+                mouth: new THREE.Vector2(-4, 3),
+                stomach: new THREE.Vector2(-4, 1),
+                intestine: new THREE.Vector2(-4, -1),
+                liver: new THREE.Vector2(-2, 0),
+                bloodstream: new THREE.Vector2(0, 0),
+                muscle: new THREE.Vector2(2, 2),
+                fat: new THREE.Vector2(2, -2),
+                cell: new THREE.Vector2(4, 0)
+            };
+            
+            // Create nodes for each component
+            metabolismObjects.nodes = {};
+            const nodeRadius = 0.5;
+            
+            Object.entries(nodePositions).forEach(([key, position]) => {
+                const nodeGeometry = new THREE.CircleGeometry(nodeRadius, 32);
+                let nodeMaterial;
+                
+                // Different colors for different node types
+                switch(key) {
+                    case 'mouth':
+                    case 'stomach':
+                    case 'intestine':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff9999 }); // Digestive - red
+                        break;
+                    case 'liver':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x8b4513 }); // Brown
+                        break;
+                    case 'bloodstream':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Blood - red
+                        break;
+                    case 'muscle':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff6347 }); // Muscle - red-orange
+                        break;
+                    case 'fat':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Fat - yellow
+                        break;
+                    case 'cell':
+                        nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Cell - green
+                        break;
+                }
+                
+                const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                node.position.set(position.x, position.y, 0);
+                scene.add(node);
+                metabolismObjects.nodes[key] = node;
+                
+                // Add text labels for each node
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 64;
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.font = '24px Arial';
+                context.fillStyle = '#000000';
+                context.textAlign = 'center';
+                context.fillText(key.charAt(0).toUpperCase() + key.slice(1), canvas.width / 2, canvas.height / 2 + 8);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const labelMaterial = new THREE.SpriteMaterial({ map: texture });
+                const label = new THREE.Sprite(labelMaterial);
+                label.position.set(position.x, position.y - 0.8, 0);
+                label.scale.set(2, 0.5, 1);
+                scene.add(label);
+            });
+            
+            // Create connections between nodes
+            const connections = [
+                ['mouth', 'stomach'],
+                ['stomach', 'intestine'],
+                ['intestine', 'liver'],
+                ['liver', 'bloodstream'],
+                ['intestine', 'bloodstream'],
+                ['bloodstream', 'muscle'],
+                ['bloodstream', 'fat'],
+                ['bloodstream', 'cell']
+            ];
+            
+            metabolismObjects.connections = [];
+            
+            connections.forEach(([from, to]) => {
+                const fromPos = nodePositions[from];
+                const toPos = nodePositions[to];
+                
+                const points = [];
+                points.push(new THREE.Vector3(fromPos.x, fromPos.y, 0));
+                points.push(new THREE.Vector3(toPos.x, toPos.y, 0));
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 2 });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                scene.add(line);
+                
+                metabolismObjects.connections.push({
+                    from: from,
+                    to: to,
+                    line: line
+                });
+            });
+        }
+
+        // Set up event listeners for UI controls
+        function initEventListeners() {
+            // Food intake sliders
+            document.getElementById('carbs-input').addEventListener('input', function() {
+                document.getElementById('carbs-value').textContent = this.value + 'g';
+            });
+            
+            document.getElementById('fats-input').addEventListener('input', function() {
+                document.getElementById('fats-value').textContent = this.value + 'g';
+            });
+            
+            document.getElementById('proteins-input').addEventListener('input', function() {
+                document.getElementById('proteins-value').textContent = this.value + 'g';
+            });
+            
+            // Eat button
+            document.getElementById('eat-button').addEventListener('click', function() {
+                const carbs = parseInt(document.getElementById('carbs-input').value);
+                const fats = parseInt(document.getElementById('fats-input').value);
+                const proteins = parseInt(document.getElementById('proteins-input').value);
+                
+                consumeFood(carbs, fats, proteins);
+            });
+            
+            // Exercise button
+            document.getElementById('exercise-button').addEventListener('click', function() {
+                const intensity = document.getElementById('exercise-type').value;
+                startExercise(intensity);
+            });
+            
+            // Reset button
+            document.getElementById('reset-button').addEventListener('click', resetSimulation);
+            
+            // Pause button
+            document.getElementById('pause-button').addEventListener('click', function() {
+                isSimulationRunning = !isSimulationRunning;
+                this.textContent = isSimulationRunning ? 'Pause' : 'Resume';
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isSimulationRunning) {
+                updateSimulation();
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // Update simulation state each frame
+        function updateSimulation() {
+            // Basic metabolism simulation
+            simulationState.energy -= 0.1 * simulationState.metabolicRate;
+            
+            // Update particles (will be implemented in next step)
+            updateParticles();
+            
+            // Highlight active pathways based on current metabolism
+            highlightActivePathways();
+            
+            // Update UI every few frames
+            if (Math.random() < 0.05) {
+                updateUI();
+            }
+        }
+        
+        // Create a new particle
+        function createParticle(type, startNode, endNode) {
+            const startPosition = metabolismObjects.nodes[startNode].position.clone();
+            const endPosition = metabolismObjects.nodes[endNode].position.clone();
+            
+            // Create particle geometry and material
+            const particleGeometry = new THREE.CircleGeometry(particleTypes[type].size, 16);
+            const particleMaterial = new THREE.MeshBasicMaterial({ 
+                color: particleTypes[type].color,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            particle.position.copy(startPosition);
+            scene.add(particle);
+            
+            // Add to particles array with metadata
+            particles.push({
+                mesh: particle,
+                type: type,
+                startNode: startNode,
+                endNode: endNode,
+                startPosition: startPosition,
+                endPosition: endPosition,
+                progress: 0,
+                speed: 0.01 + Math.random() * 0.01  // Slight variation in speed
+            });
+            
+            return particle;
+        }
+        
+        // Update all particles
+        function updateParticles() {
+            // Update existing particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                
+                // Update progress
+                particle.progress += particle.speed;
+                
+                if (particle.progress >= 1) {
+                    // Particle reached destination
+                    scene.remove(particle.mesh);
+                    particles.splice(i, 1);
+                    
+                    // Handle transformations at each node
+                    handleParticleTransformation(particle);
+                } else {
+                    // Move particle along path
+                    const newX = particle.startPosition.x + (particle.endPosition.x - particle.startPosition.x) * particle.progress;
+                    const newY = particle.startPosition.y + (particle.endPosition.y - particle.startPosition.y) * particle.progress;
+                    
+                    particle.mesh.position.set(newX, newY, 0);
+                }
+            }
+            
+            // Randomly generate new food particles when eating
+            if (simulationState.nutrients.carbs > 0 || simulationState.nutrients.fats > 0 || simulationState.nutrients.proteins > 0) {
+                if (Math.random() < 0.05) {
+                    // Determine which type of nutrient to create
+                    let nutrientType;
+                    const totalNutrients = simulationState.nutrients.carbs + simulationState.nutrients.fats + simulationState.nutrients.proteins;
+                    const rand = Math.random() * totalNutrients;
+                    
+                    if (rand < simulationState.nutrients.carbs) {
+                        nutrientType = 'carbs';
+                        simulationState.nutrients.carbs -= 0.1;
+                    } else if (rand < simulationState.nutrients.carbs + simulationState.nutrients.fats) {
+                        nutrientType = 'fats';
+                        simulationState.nutrients.fats -= 0.1;
+                    } else {
+                        nutrientType = 'proteins';
+                        simulationState.nutrients.proteins -= 0.1;
+                    }
+                    
+                    // Create particle from mouth to stomach
+                    createParticle(nutrientType, 'mouth', 'stomach');
+                }
+            }
+        }
+        
+        // Handle particle transformations at nodes
+        function handleParticleTransformation(particle) {
+            // Different transformations based on particle type and destination
+            switch(particle.endNode) {
+                case 'stomach':
+                    // Food continues to intestine
+                    createParticle(particle.type, 'stomach', 'intestine');
+                    break;
+                    
+                case 'intestine':
+                    // Nutrients absorbed into bloodstream or processed by liver
+                    if (Math.random() < 0.7) {
+                        // Direct to bloodstream
+                        createParticle(particle.type, 'intestine', 'bloodstream');
+                    } else {
+                        // To liver for processing
+                        createParticle(particle.type, 'intestine', 'liver');
+                    }
+                    break;
+                    
+                case 'liver':
+                    // Liver processes nutrients
+                    if (particle.type === 'carbs') {
+                        // Convert carbs to glucose
+                        createParticle('glucose', 'liver', 'bloodstream');
+                    } else {
+                        // Other nutrients pass through
+                        createParticle(particle.type, 'liver', 'bloodstream');
+                    }
+                    break;
+                    
+                case 'bloodstream':
+                    // Distribute to cells, muscles, or fat based on metabolism and nutrient type
+                    let destination;
+                    
+                    if (simulationState.activeMetabolism === 'anaerobic' && particle.type === 'glucose') {
+                        destination = 'muscle';
+                    } else if (simulationState.activeMetabolism === 'fat-burning' && particle.type === 'fats') {
+                        destination = 'cell';
+                    } else if (particle.type === 'fats' && simulationState.energy > 2500) {
+                        // Store excess energy as fat
+                        destination = 'fat';
+                    } else {
+                        // Default to cell for energy production
+                        destination = 'cell';
+                    }
+                    
+                    createParticle(particle.type, 'bloodstream', destination);
+                    break;
+                    
+                case 'cell':
+                    // In cells, nutrients are converted to ATP
+                    if (Math.random() < 0.3) {
+                        // Create ATP particles that stay within the cell
+                        createParticle('atp', 'cell', 'cell');
+                    }
+                    break;
+                    
+                case 'muscle':
+                    // In muscles, glucose is used for energy
+                    if (particle.type === 'glucose' && Math.random() < 0.3) {
+                        // Create ATP in muscle
+                        createParticle('atp', 'muscle', 'muscle');
+                    }
+                    break;
+            }
+        }
+        
+        // Highlight active metabolic pathways based on current state
+        function highlightActivePathways() {
+            // Reset all connections to default color
+            metabolismObjects.connections.forEach(connection => {
+                connection.line.material.color.set(0x888888);
+            });
+            
+            // Highlight active pathways based on metabolism type
+            let activeConnections = [];
+            
+            if (simulationState.activeMetabolism === 'aerobic') {
+                // Aerobic metabolism - glucose through bloodstream to cells
+                activeConnections = [
+                    ['bloodstream', 'cell']
+                ];
+            } else if (simulationState.activeMetabolism === 'anaerobic') {
+                // Anaerobic metabolism - glucose to muscles
+                activeConnections = [
+                    ['bloodstream', 'muscle']
+                ];
+            } else if (simulationState.activeMetabolism === 'fat-burning') {
+                // Fat metabolism - fat to bloodstream to cells
+                activeConnections = [
+                    ['fat', 'bloodstream'],
+                    ['bloodstream', 'cell']
+                ];
+            }
+            
+            // Highlight the active connections
+            metabolismObjects.connections.forEach(connection => {
+                activeConnections.forEach(([from, to]) => {
+                    if (connection.from === from && connection.to === to) {
+                        connection.line.material.color.set(0x00ff00); // Green for active
+                    }
+                });
+            });
+        }
+
+        // Update UI elements with current simulation state
+        function updateUI() {
+            document.getElementById('energy-value').textContent = Math.round(simulationState.energy) + ' kcal';
+            document.getElementById('glucose-value').textContent = Math.round(simulationState.glucose) + ' mg/dL';
+            document.getElementById('metabolic-rate').textContent = simulationState.metabolicRate.toFixed(1) + 'x';
+            
+            // Update metabolism indicators
+            document.getElementById('aerobic-indicator').className = 
+                simulationState.activeMetabolism === 'aerobic' ? 'p-2 bg-green-500 text-white rounded-md flex-1 text-center font-medium' : 'p-2 bg-gray-200 rounded-md flex-1 text-center font-medium';
+            
+            document.getElementById('anaerobic-indicator').className = 
+                simulationState.activeMetabolism === 'anaerobic' ? 'p-2 bg-purple-500 text-white rounded-md flex-1 text-center font-medium' : 'p-2 bg-gray-200 rounded-md flex-1 text-center font-medium';
+            
+            document.getElementById('fat-burning-indicator').className = 
+                simulationState.activeMetabolism === 'fat-burning' ? 'p-2 bg-yellow-500 text-white rounded-md flex-1 text-center font-medium' : 'p-2 bg-gray-200 rounded-md flex-1 text-center font-medium';
+        }
+
+        // Handle food consumption
+        function consumeFood(carbs, fats, proteins) {
+            // Add nutrients to simulation state
+            simulationState.nutrients.carbs += carbs;
+            simulationState.nutrients.fats += fats;
+            simulationState.nutrients.proteins += proteins;
+            
+            // Calculate energy from macronutrients (simplified)
+            const energyFromCarbs = carbs * 4;    // 4 kcal per gram
+            const energyFromFats = fats * 9;      // 9 kcal per gram
+            const energyFromProteins = proteins * 4; // 4 kcal per gram
+            const totalEnergy = energyFromCarbs + energyFromFats + energyFromProteins;
+            
+            // Update simulation state
+            simulationState.energy += totalEnergy;
+            simulationState.glucose += carbs * 0.5; // Simplified conversion of carbs to glucose
+            
+            // Create initial particles for each nutrient type
+            if (carbs > 0) {
+                // Create multiple particles based on amount
+                const numCarbParticles = Math.min(10, Math.ceil(carbs / 10));
+                for (let i = 0; i < numCarbParticles; i++) {
+                    createParticle('carbs', 'mouth', 'stomach');
+                }
+            }
+            
+            if (fats > 0) {
+                const numFatParticles = Math.min(10, Math.ceil(fats / 10));
+                for (let i = 0; i < numFatParticles; i++) {
+                    createParticle('fats', 'mouth', 'stomach');
+                }
+            }
+            
+            if (proteins > 0) {
+                const numProteinParticles = Math.min(10, Math.ceil(proteins / 10));
+                for (let i = 0; i < numProteinParticles; i++) {
+                    createParticle('proteins', 'mouth', 'stomach');
+                }
+            }
+            
+            // Update info panel with detailed explanation
+            document.getElementById('info-panel').innerHTML = `
+                <p><strong>Food consumed:</strong> ${carbs}g carbs, ${fats}g fats, ${proteins}g proteins</p>
+                <p><strong>Energy added:</strong> ${totalEnergy} kcal</p>
+                <p><strong>Digestion process:</strong></p>
+                <ul class="list-disc pl-5 space-y-1">
+                    <li><span class="inline-block w-3 h-3 rounded-full bg-white mr-1"></span> Carbohydrates are broken down into glucose (yellow particles)</li>
+                    <li><span class="inline-block w-3 h-3 rounded-full bg-orange-500 mr-1"></span> Fats are broken down into fatty acids</li>
+                    <li><span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1"></span> Proteins are broken down into amino acids</li>
+                </ul>
+                <p class="mt-2">Watch as nutrients travel through your digestive system, get processed by the liver, enter the bloodstream, and are used by cells to produce ATP (green particles).</p>
+            `;
+        }
+
+        // Handle exercise
+        function startExercise(intensity) {
+            let intensityFactor = 1;
+            let metabolismType = 'aerobic';
+            
+            switch(intensity) {
+                case 'light':
+                    intensityFactor = 1.5;
+                    metabolismType = 'aerobic';
+                    break;
+                case 'moderate':
+                    intensityFactor = 2.5;
+                    metabolismType = 'aerobic';
+                    break;
+                case 'intense':
+                    intensityFactor = 4;
+                    metabolismType = 'anaerobic';
+                    break;
+                default: // rest
+                    intensityFactor = 1;
+                    metabolismType = 'aerobic';
+            }
+            
+            // Update simulation state
+            simulationState.metabolicRate = intensityFactor;
+            simulationState.activeMetabolism = metabolismType;
+            
+            // If glucose is low, switch to fat burning
+            if (simulationState.glucose < 70 && intensity !== 'intense') {
+                simulationState.activeMetabolism = 'fat-burning';
+            }
+            
+            // Update info panel
+            document.getElementById('info-panel').innerHTML = `
+                <p><strong>Exercise started:</strong> ${intensity} intensity</p>
+                <p><strong>Metabolic rate:</strong> ${intensityFactor.toFixed(1)}x</p>
+                <p><strong>Active metabolism:</strong> ${simulationState.activeMetabolism}</p>
+                <p>During ${intensity} exercise, your body is primarily using ${simulationState.activeMetabolism} metabolism for energy production.</p>
+            `;
+            
+            // In future steps, we'll add animations for increased cellular activity
+        }
+
+        // Reset simulation to initial state
+        function resetSimulation() {
+            // Reset simulation state
+            simulationState.energy = 2000;
+            simulationState.glucose = 100;
+            simulationState.glycogen = 500;
+            simulationState.fatStores = 10000;
+            simulationState.metabolicRate = 1.0;
+            simulationState.activeMetabolism = 'aerobic';
+            simulationState.nutrients = {
+                carbs: 0,
+                fats: 0,
+                proteins: 0
+            };
+            
+            // Reset UI
+            document.getElementById('carbs-input').value = 50;
+            document.getElementById('carbs-value').textContent = '50g';
+            document.getElementById('fats-input').value = 30;
+            document.getElementById('fats-value').textContent = '30g';
+            document.getElementById('proteins-input').value = 20;
+            document.getElementById('proteins-value').textContent = '20g';
+            document.getElementById('exercise-type').value = 'rest';
+            
+            // Update info panel
+            document.getElementById('info-panel').innerHTML = `
+                <p>Simulation reset to initial state.</p>
+                <p>Welcome to the Human Metabolism Simulation. Use the controls on the left to simulate food intake and exercise.</p>
+            `;
+            
+            updateUI();
+        }
+
+        // Initialize the application when the page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
