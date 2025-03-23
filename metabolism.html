@@ -99,6 +99,11 @@
                 <!-- Simulation Controls -->
                 <div>
                     <h3 class="font-medium mb-2">Simulation</h3>
+                    <div class="mb-3">
+                        <label class="block text-sm mb-1">Simulation Speed</label>
+                        <input type="range" min="0.5" max="3" step="0.5" value="1" class="w-full" id="speed-input">
+                        <span id="speed-value" class="text-sm">1x (Normal)</span>
+                    </div>
                     <div class="flex space-x-2">
                         <button id="reset-button" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md transition">Reset</button>
                         <button id="pause-button" class="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded-md transition">Pause</button>
@@ -160,6 +165,37 @@
                         <p>Welcome to the Human Metabolism Simulation. Use the controls on the left to simulate food intake and exercise.</p>
                         <p>The visualization will show how nutrients are processed and how different types of metabolism are activated.</p>
                     </div>
+                    
+                    <!-- Particle Color Legend -->
+                    <div class="mt-4 border-t pt-3">
+                        <h3 class="font-medium mb-2">Particle Legend</h3>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-white mr-2 border border-gray-400"></span>
+                                <span>Carbohydrates</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-yellow-300 mr-2"></span>
+                                <span>Glucose</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-orange-500 mr-2"></span>
+                                <span>Fats</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                                <span>Proteins</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-purple-500 mr-2"></span>
+                                <span>Ketones</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span>
+                                <span>ATP (Energy)</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -191,6 +227,7 @@
             fatStores: 10000,    // kcal
             metabolicRate: 1.0,  // multiplier
             fastingHours: 0,     // hours since last meal
+            simulationSpeed: 1.0, // speed multiplier
             activeMetabolism: 'aerobic', // aerobic, anaerobic, fat-burning, ketogenic
             nutrients: {
                 carbs: 0,
@@ -446,6 +483,18 @@
                 document.getElementById('fasting-input-value').textContent = this.value + ' hours';
             });
             
+            // Simulation speed slider
+            document.getElementById('speed-input').addEventListener('input', function() {
+                const speed = parseFloat(this.value);
+                simulationState.simulationSpeed = speed;
+                let speedText = speed + 'x';
+                if (speed === 0.5) speedText += ' (Slow)';
+                else if (speed === 1) speedText += ' (Normal)';
+                else if (speed === 2) speedText += ' (Fast)';
+                else if (speed === 3) speedText += ' (Very Fast)';
+                document.getElementById('speed-value').textContent = speedText;
+            });
+            
             // Eat button
             document.getElementById('eat-button').addEventListener('click', function() {
                 const carbs = parseInt(document.getElementById('carbs-input').value);
@@ -522,9 +571,38 @@
             particle.position.copy(startPosition);
             scene.add(particle);
             
+            // Create particle label
+            let label = null;
+            // Only show labels for 20% of particles to avoid clutter
+            if (Math.random() < 0.2) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 128;
+                canvas.height = 32;
+                
+                // Background with slight transparency
+                context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Text
+                context.font = '16px Arial';
+                context.fillStyle = '#000000';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(particleTypes[type].label, canvas.width / 2, canvas.height / 2);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const labelMaterial = new THREE.SpriteMaterial({ map: texture });
+                label = new THREE.Sprite(labelMaterial);
+                label.scale.set(0.6, 0.15, 1);
+                label.position.set(startPosition.x, startPosition.y + 0.2, 0);
+                scene.add(label);
+            }
+            
             // Add to particles array with metadata
-            particles.push({
+            const particleObj = {
                 mesh: particle,
+                label: label,
                 type: type,
                 startNode: startNode,
                 endNode: endNode,
@@ -532,9 +610,10 @@
                 endPosition: endPosition,
                 progress: 0,
                 speed: 0.01 + Math.random() * 0.01  // Slight variation in speed
-            });
+            };
             
-            return particle;
+            particles.push(particleObj);
+            return particleObj;
         }
         
         // Update all particles
@@ -543,11 +622,14 @@
             for (let i = particles.length - 1; i >= 0; i--) {
                 const particle = particles[i];
                 
-                // Update progress
-                particle.progress += particle.speed;
+                // Update progress based on simulation speed
+                particle.progress += particle.speed * simulationState.simulationSpeed;
                 
                 if (particle.progress >= 1) {
                     // Particle reached destination
+                    if (particle.label) {
+                        scene.remove(particle.label);
+                    }
                     scene.remove(particle.mesh);
                     particles.splice(i, 1);
                     
@@ -559,6 +641,11 @@
                     const newY = particle.startPosition.y + (particle.endPosition.y - particle.startPosition.y) * particle.progress;
                     
                     particle.mesh.position.set(newX, newY, 0);
+                    
+                    // Update label position if it exists
+                    if (particle.label) {
+                        particle.label.position.set(newX, newY + 0.2, 0);
+                    }
                 }
             }
             
@@ -886,6 +973,11 @@
 
         // Handle food consumption
         function consumeFood(carbs, fats, proteins) {
+            // Reset fasting state when food is consumed
+            simulationState.fastingHours = 0;
+            document.getElementById('fasting-input').value = 0;
+            document.getElementById('fasting-input-value').textContent = '0 hours';
+            
             // Add nutrients to simulation state
             simulationState.nutrients.carbs += carbs;
             simulationState.nutrients.fats += fats;
